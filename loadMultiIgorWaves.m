@@ -53,6 +53,8 @@ end
 waves = struct();
 for k = 1:numWaves
     waves.(waveNames{k}) = dataMat(:,k); % column vector
+        waves.(waveNames{k}) = waves.(waveNames{k})*10e12
 end
+
 
 end
