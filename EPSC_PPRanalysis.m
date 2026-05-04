@@ -6,17 +6,14 @@
 % calculations
 
 %%
-tic
 
-BEFORE THIS RUNS DOUBLE CHECK THE SECTION WITH DELETING LINES- WHEN TRANSFERRED TO FRAMESCAN ANALYSIS IT TOOK OUT THE LAST N TRIALS, NOT THE SPECIFIC TRIALS YOU DELETED
+folder = "\\bunson\bunson\Higley_Lab\Lauren bunsen\260501 - LP252 - estim aga AMN082\cell F";
+figureFolder = fullfile(folder, 'Matlab figures');
+mkdir(figureFolder)
+addpath(genpath(figureFolder))
 
-folder = "\\bunson\bunson\Higley_Lab\Lauren bunsen\250929 - LP190 - EPSCS aga amn082\cell F";
-figurefolder = fullfile(folder, 'Matlab figures');
-mkdir(figurefolder)
-addpath(genpath(figurefolder))
-start = '11:11';
-
-Expt.marker = 'LP190f';
+Expt.marker = 'LP252f';
+Expt.date = '260501';
 Expt.internal = 'CsGluc';
 Expt.stim = 'theta';
 Expt.temp = 'RT';
@@ -24,172 +21,25 @@ Expt.CaMg = '1.2mM Ca, 1mM Mg';
 Expt.region = 'V1';
 Expt.trialInterval = 15; % ISI seconds
 
-ControlTrial = 'e3';         Epoch1 = 'Control';
-      Epoch2 = 'e4';         Pharm1 = 'ConoGVIA'; % ConoGVIA, can't have -
-      Epoch3 = 'e5';         Pharm2 = 'ConoGVIA_AMN082'; %'AgaTK_CdCl2'; % can't have a +
-% Epoch4 = 'e6';         Pharm3 = 'AgaTK_100uM_AMN082';
+ControlTrial = 'e5';         Epoch1 = 'Control';
+      Epoch2 = 'e6';         Pharm1 = 'AgaTK'; % ConoGVIA, can't have -
+      Epoch3 = 'e7';        Pharm2 = 'AgaTK_AMN082';
+Expt.concentrations = {'200nM', '100uM'};
 
-Hzs = {'x1', 'x5_5Hz', 'x5_20Hz', 'x5_40Hz'};
-NumPositions = 4; %number of stim paradigms
-ps = arrayfun(@(x) ['p' num2str(x)], 1:NumPositions, 'UniformOutput', false);
+Hzs = {'x1', 'Hz_20'}; % must have letter first
+ps = arrayfun(@(x) ['p' num2str(x)], 1:numel(Hzs), 'UniformOutput', false);
 
 epochs = {ControlTrial, Epoch2, Epoch3};
-pharms = {Epoch1, Pharm1, Pharm2};
+conditions = {Epoch1, Pharm1, Pharm2};
 
-pharmSave = {'Control', 'ConoGVIA', 'ConoGVIA + AMN082'};
-concentrations = {'10uM', '100uM'};
-
-
-% List of pharmacology conditions and colors
-Colors
-color = cell(1, numel(pharms));  % initialize color cell array
-color{1} = colors.gray;          % always assign gray to the first condition
-
-if numel(pharms) >= 2
-    if strcmp(pharms{2}, 'AgaTK')
-        color{2} = colors.Aga;
-    elseif strcmp(pharms{2}, 'ConoGVIA')
-        color{2} = colors.Cono;
-    elseif strcmp(pharms{2}, 'Muscarine')
-        color{2} = colors.Muscarine;
-    elseif strcmp(pharms{2}, 'AMN082')
-        color{2} = colors.AMN082;
-    end
-end
-
-if numel(pharms) >= 3
-    if contains(pharms{3}, 'CdCl2')
-        color{3} = colors.CdCl2;
-    elseif strcmp(pharms{3}, 'Muscarine_ConoGVIA')
-        color{3} = colors.Cono;
-    elseif strcmp(pharms{3}, 'AgaTK_Muscarine')
-        color{3} = colors.Muscarine;
-    elseif strcmp(pharms{3}, 'ConoGVIA_Muscarine')
-        color{3} = colors.Muscarine;
-    elseif strcmp(pharms{3}, 'ConoGVIA_AMN082')
-        color{3} = colors.AMN082;
-    elseif strcmp(pharms{3}, 'AgaTK_AMN082')
-        color{3} = colors.AMN082;
-    else
-        color{3} = colors.black;
-    end
-end
-
-if numel(pharms) == 4
-    if contains(pharms{4}, 'CdCl2')
-        color{4} = colors.CdCl2;
-    elseif contains(pharms{4}, 'AMN082')
-        color{4} = colors.orange;
-    end
-end
-
-Data = struct;
-
-for j = 1:length(epochs)
-    epoch = epochs{j};
-    pharm = pharms{j};
-
-    % Find all ITX files matching the current epoch
-    FileNames = dir(fullfile(folder, ['*' epoch '*.itx']));
-
-    for k = 1:numel(FileNames)
-        avgdName = FileNames(k).name;
-        fullPath = fullfile(folder, avgdName);
-
-        % Extract position from filename: look for "p1", "p2", etc.
-        posMatch = regexp(avgdName, 'p(\d)', 'tokens');
-        posNum = str2double(posMatch{1}{1});  % Convert '1' to 1
-        if posNum < 1 || posNum > NumPositions
-            warning('Position %d out of range in file: %s', posNum, avgdName);
-            continue;
-        end
-
-        Hz = Hzs{posNum};  % Map position to Hz label
-
-        % Read data and store it
-        data = readITXwaves(fullPath);
-        Data.(pharm).(Hz) = data;
-    end
-end
-
-Data.(Pharm1).Concentration = concentrations{1};
-Data.(Pharm2).Concentration = concentrations{2};
-
-Time.TimeStart = 0;
-Time.dt = 1/10000;
-Time.Trialpts = 14000;
-Time.sec= mod(Time.TimeStart + (0:Time.Trialpts-1)*Time.dt, 1024);% WHY DOES THIS WORK??
-Time.sec = Time.sec';
-Time.ms = 1000*Time.sec;
-Colors
-clear posNum        clear posMatch
-toc
-
-
-% pull individual trials into an alltrials matrix + baseline subtract
-
-% Loop over all pharm and Hz combinations
-for p = 1:length(pharms)
-    pharm = pharms{p};
-    for h = 1:length(Hzs)
-        Hz = Hzs{h};
-        Data.(pharm).(Hz).allTrials = struct();
-
-        % Get the struct that contains the waveforms
-        waveStruct = Data.(pharm).(Hz);
-
-        % Find all field names matching AD0_<number> (excluding *_avg)
-        fieldNames = fieldnames(waveStruct);
-        trialFields = {};
-
-        for i = 1:numel(fieldNames)
-            field = fieldNames{i};
-
-            if ~isempty(regexp(field, '^AD0_\d+$', 'once'))
-                trialFields{end+1} = field;
-            end
-        end
-
-        % Sort field names by numeric index (so AD0_10 doesn't come before AD0_2)
-        % trialFields = sort(trialFields);  % Optional: sort to keep order predictable
-        Data.(pharm).(Hz).ADNames = trialFields;
-        % Convert to matrix
-        nTrials = numel(trialFields);
-        if nTrials > 0
-            waveformLength = length(waveStruct.(trialFields{1}));
-            allTrials = zeros(waveformLength, nTrials);
-
-            for k = 1:nTrials
-                allTrials(:, k) = waveStruct.(trialFields{k});
-            end
-
-            % Save to struct
-            Data.(pharm).(Hz).allTrials = allTrials;
-        else
-            warning('No AD0_x waveforms found for %s %s', pharm, Hz);
-        end
-    end
-end
-
-% Baseline subtract trials
-for p = 1:length(pharms)
-    pharm = pharms{p};
-
-    for j = 1:length(Hzs)
-        Hz = Hzs{j};
-        Data.(pharm).(Hz).basesubTrials = [];
-        for k = 1:size(Data.(pharm).(Hz).allTrials,2)
-            Data.(pharm).(Hz).basesubTrials(:,k) = Data.(pharm).(Hz).allTrials(:,k) - mean(Data.(pharm).(Hz).allTrials(1:800,k));
-        end
-    end
-end
-
+assignColors(conditions)
+compileEphysData(epochs, folder, conditions, Expt.concentrations, Hzs, Expt, figureFolder);
 
 %% Delete waves (only delete spiking, trials that are obviously off, not just not averaged for pharmacology)
 clear h; clear lineHandles;
 
-for p = 1:length(pharms)
-    pharm = pharms{p};
+for p = 1:length(conditions)
+    pharm = conditions{p};
 
     fig = figure('Name', pharm, 'NumberTitle', 'off', 'Position', [310 50 1254 946]);
     t = tiledlayout(2, 2, 'TileSpacing', 'compact');
@@ -255,7 +105,7 @@ end
 
 %% Plot all waves for particular epoch
 % Get user selection via checkbox dialog
-selectPharmsWithCheckbox(pharmSave);
+selectPharmsWithCheckbox(conditions);
 
 if isempty(selectedIdx)
     disp('No conditions selected. Aborting.');
@@ -264,8 +114,8 @@ end
 
 %Proceed only with selected conditions
 for idx = selectedIdx
-    pharm = pharms{idx};
-    pharmName = pharmSave{idx};
+    pharm = conditions{idx};
+    pharmName = conditions{idx};
     disp(['Plotting: ' pharm])  % Debug output
 
     fig = figure('Name', pharm, 'NumberTitle', 'off', 'Position', [310 50 1254 946]);
@@ -336,8 +186,8 @@ Data.allTrials = {};
 Data.basesuballTrials = struct();
 Data.allfirststimPeaks = struct();
 
-for i = 1:numel(pharms)
-    pharm = pharms{i};
+for i = 1:numel(conditions)
+    pharm = conditions{i};
 
     for j = 1:numel(Hzs)
         Hz = Hzs{j};
@@ -411,8 +261,8 @@ title('Peak EPSCs Over Time by Condition');
 
 % Create color map
 colorMap = containers.Map;
-for p = 1:numel(pharms)
-    pharm = pharms{p};
+for p = 1:numel(conditions)
+    pharm = conditions{p};
     colorMap(pharm) = color{p};
     Data.(pharm).ADNames = {};  % initialize
 end
@@ -426,8 +276,8 @@ for i = 1:numel(fieldNames)
 
     % Identify matching pharmacology condition
     pharmMatch = '';
-    for p = 1:numel(pharms)
-        pharm = pharms{p};
+    for p = 1:numel(conditions)
+        pharm = conditions{p};
         for h = 1:numel(Hzs)
             Hz = Hzs{h};
             if isfield(Data.(pharm).(Hz), ADName)
@@ -461,11 +311,11 @@ for i = 1:numel(fieldNames)
 end
 
 % Plot invisible point for legend
-legendHandles = gobjects(1, numel(pharms));  % preallocate graphic handles
-for p = 1:numel(pharms)
-    pharm = pharms{p};
+legendHandles = gobjects(1, numel(conditions));  % preallocate graphic handles
+for p = 1:numel(conditions)
+    pharm = conditions{p};
     c = colorMap(pharm);  % color for this condition
-    pharmLegend = pharmSave{p};
+    pharmLegend = conditions{p};
 
     % Plot 1 invisible point for legend
     legendHandles(p) = scatter(nan, nan, 40, ...
@@ -476,7 +326,7 @@ end
 
 % Draw vertical lines every 10 minutes
 legend(legendHandles, 'Location', 'northwest');
-lineSpacing = 40; % 10 minutes
+lineSpacing = (60/Expt.trialInterval)*5; % 5 minutes
 xMax = ceil(max(timePoints) / 5) * 5;
 xlim([0 xMax]);
 vlineTimes = lineSpacing * (1:ceil(xMax/lineSpacing));
@@ -485,12 +335,12 @@ for x = vlineTimes
 end
 
 
-saveas(gcf, sprintf('%s/%s', figurefolder, 'EPSC amplitude peaks over conditions'))
+saveas(gcf, sprintf('%s/%s', figureFolder, 'EPSC amplitude peaks over conditions'))
 
 % CREATE GUI TO INPUT FIRST/LAST TRIALS FOR AVERAGING
 % Create figure
-for p = 1:length(pharms)
-    pharm = pharms{p};
+for p = 1:length(conditions)
+    pharm = conditions{p};
     parts = split(Data.(pharm).ADNames(1,1), '_');
     Data.(pharm).firstTrialNum = parts(2);
     parts = split(Data.(pharm).ADNames(1,end),'_');
@@ -502,11 +352,11 @@ f = figure('Name','Input First/Last Trials for Averaging', 'position', [1126 623
 avginghandles = struct();
 guidata(f, avginghandles)
 
-row = length(pharms);
+row = length(conditions);
 trialCount = 1;
 
-for p = 1:length(pharms)
-    pharm = pharms{p};
+for p = 1:length(conditions)
+    pharm = conditions{p};
 
     nTrials = numel(fieldnames(Data.basesuballTrials));
 
@@ -542,13 +392,13 @@ xlabel('Trial')
 title(Expt.marker)
 ymax = round(max(calcRs))+3;
 ylim([0 ymax])
-saveas(gcf,sprintf('%s/%s', figurefolder, 'Rs'))
+saveas(gcf,sprintf('%s/%s', figureFolder, 'Rs'))
 ymax = round(max(calcRs))+3;
 ylim([0 ymax]) 
 
 % Submit trials for averaging UI
 uicontrol(f, 'Style','pushbutton','String','Submit', 'Position', [150, 10, 100, 30], ...
-    'callback', @(src, event) submitCallbackEPHYS(f, Data, avginghandles, pharms));
+    'callback', @(src, event) submitCallbackEPHYS(f, Data, avginghandles, conditions));
 % Wait for user to press submit
 uiwait(f);  % Execution will pause here
 
@@ -559,8 +409,8 @@ close all;  % Or just: close(f);
 disp('Submit clicked and figure closed.');
 
 %% Calculate first stim averages, plot all averages by Hz
-for p = 1:length(pharms)
-    pharm = pharms{p};
+for p = 1:length(conditions)
+    pharm = conditions{p};
     startIdx = Data.(pharm).firstTrialAvgIdx;
     endIdx = Data.(pharm).lastTrialAvgIdx;
 
@@ -594,10 +444,10 @@ for p = 1:length(pharms)
 end
 % Plot first stim average of all conditions
 figure('Position',[317   454   560   420], 'Visible','off');
-plotHandles = gobjects(1, length(pharms));
+plotHandles = gobjects(1, length(conditions));
 
-for p = 1:length(pharms)
-    pharm = pharms{p};
+for p = 1:length(conditions)
+    pharm = conditions{p};
 
     hold on;
     plotHandles(p) = plot(0:1:352,Data.(pharm).firststimavgTrace, 'color',color{p}, 'linewidth', 1.5);
@@ -607,15 +457,15 @@ for p = 1:length(pharms)
     xlim([0 350])
     % ylim([-350 100])
 end
-legend(plotHandles, pharmSave, 'location','southwest')
+legend(plotHandles, conditions, 'location','southwest')
 
-saveas(gcf,sprintf('%s/%s%s', figurefolder, 'Average first stim EPSCs over conditions'));
+saveas(gcf,sprintf('%s/%s%s', figureFolder, 'Average first stim EPSCs over conditions'));
 close all
 
 
 % Calculate frequency averages
-for p = 1:length(pharms)
-    pharm = pharms{p};
+for p = 1:length(conditions)
+    pharm = conditions{p};
     firstIdx = Data.(pharm).firstTrialAvgIdx;
     lastIdx = Data.(pharm).lastTrialAvgIdx;
 
@@ -671,11 +521,11 @@ for j = 1:length(Hzs)
     nexttile
     hold on
 
-    for p = 1:length(pharms)
-        pharm = pharms{p};
-        pharmName = pharmSave{p};
+    for p = 1:length(conditions)
+        pharm = conditions{p};
+        pharmName = conditions{p};
 
-        plot(Time.ms, Data.(pharm).(Hz).avgWave,'DisplayName', pharmName, 'color', color{p},'linewidth',1.5);
+        plot(Expt.ms, Data.(pharm).(Hz).avgWave,'DisplayName', pharmName, 'color', color{p},'linewidth',1.5);
         switch j
             case 1; xlim([80 200]);
             case 2; xlim([80 1100]);
@@ -710,17 +560,18 @@ for j = 1:length(Hzs)
     ymax = max(allY);
     ylim([ymin-300, ymax+40]);  % add buffer
 end
-saveas(gcf,sprintf('%s/%s', figurefolder, 'averages of all freqs and conds'))
+saveas(gcf,sprintf('%s/%s', figureFolder, 'averages of all freqs and conds'))
 
 %% Find relative peaks of trains & normalize peaks
 % Define detection windows
+minWindows = [];
 minWindows.x1 = [1050 1200];
-minWindows.x5_5Hz = [1050 1200; 3050 3200; 5050 5200; 7050 7200; 9050 9200];
-minWindows.x5_20Hz = [1050 1200; 1550 1700; 2050 2200; 2550 2700; 3050 3200];
-minWindows.x5_40Hz = [1050 1200; 1300 1450; 1550 1700; 1800 1950; 2050 2200];
+% minWindows.x5_5Hz = [1050 1200; 3050 3200; 5050 5200; 7050 7200; 9050 9200];
+minWindows.Hz_20 = [1050 1200; 1550 1700; 2050 2200; 2550 2700; 3050 3200];
+% minWindows.x5_40Hz = [1050 1200; 1300 1450; 1550 1700; 1800 1950; 2050 2200];
 
-for p = 1:length(pharms)
-    pharm = pharms{p};
+for p = 1:length(conditions)
+    pharm = conditions{p};
 
     for j = 1:length(Hzs)
         Hz = Hzs{j};
@@ -747,8 +598,8 @@ end
 
 
 % Normalize Peaks
-for p = 1:length(pharms)
-    pharm = pharms{p};
+for p = 1:length(conditions)
+    pharm = conditions{p};
 
     for j = 1:length(Hzs)
         Hz = Hzs{j};
@@ -767,16 +618,16 @@ end
 
 % Plot normalized peaks
 HzNames = {'1','5Hz','20Hz','40Hz'};
-if numel(pharms) >= 2
-    if strcmp(pharms{2}, 'AgaTK')
+if numel(conditions) >= 2
+    if strcmp(conditions{2}, 'AgaTK')
         color{2} = colors.Aga;
-    elseif strcmp(pharms{2}, 'CdCl2')
+    elseif strcmp(conditions{2}, 'CdCl2')
         color{2} = colors.Cono;
     end
 end
 
-if numel(pharms) >= 3
-    if contains(pharms{3}, 'CdCl2')
+if numel(conditions) >= 3
+    if contains(conditions{3}, 'CdCl2')
         color{3} = colors.CdCl2;
     end
 end
@@ -792,8 +643,8 @@ for j = 2:length(Hzs)
         legend(ax, 'interpreter', 'none', 'location','bestoutside')
     end
     for p = 1:2
-        pharm = pharms{p};
-        pharmName = pharmSave{p};
+        pharm = conditions{p};
+        pharmName = conditions{p};
         plot(Data.(pharm).NormPeaks.(Hz),'-o','DisplayName', pharmName, 'color', color{p});
         title(HzName)
         ylim([0 2])
@@ -805,12 +656,12 @@ for j = 2:length(Hzs)
     end
 end
 
-saveas(gcf, sprintf('%s/%s', figurefolder, 'normalized EPSC amplitudes'))
+saveas(gcf, sprintf('%s/%s', figureFolder, 'normalized EPSC amplitudes'))
 
 %% Subtract first peak, calculate PPR
 
-for p = 1:length(pharms)
-    pharm = pharms{p};
+for p = 1:length(conditions)
+    pharm = conditions{p};
 
     for j = 2:length(Hzs)
         Hz = Hzs{j};
@@ -823,8 +674,8 @@ n = 1:length(Data.Control.x1.avgWave);
 
 % Plot overlaid traces
 figure('position',[312 127 1365 823],'visible','off');
-for p = 1:(length(pharms))-1
-    pharm = pharms{p};
+for p = 1:(length(conditions))-1
+    pharm = conditions{p};
 
     for j = 2:length(Hzs)
         Hz = Hzs{j};
@@ -864,11 +715,11 @@ for p = 1:(length(pharms))-1
         legend('Single stim','Average','First Peak Subtracted','location','best')
     end
 end
-saveas(gcf,sprintf('%s/%s', figurefolder,'Overlaid Averages with First Peak subtracted'))
+saveas(gcf,sprintf('%s/%s', figureFolder,'Overlaid Averages with First Peak subtracted'))
 
 % Calculate PPR
 for p = 1:2
-    pharm = pharms{p};
+    pharm = conditions{p};
 
     for j = 2:length(Hzs)
         Hz = Hzs{j};
@@ -906,8 +757,8 @@ for j = 2:length(Hzs)
         legend(ax, 'interpreter', 'none', 'location','bestoutside')
     end
     for p = 1:2
-        pharm = pharms{p};
-        pharmName = pharmSave{p};
+        pharm = conditions{p};
+        pharmName = conditions{p};
 
         plot(1,Data.PPR.(pharm).(Hz).PPR,'o','MarkerSize',8, 'color', color{p},'DisplayName',pharmName);
         yline(1,'--','color', colors.grays.medium,'HandleVisibility','off')
@@ -919,7 +770,7 @@ for j = 2:length(Hzs)
     end
 end
 
-saveas(gcf, sprintf('%s/%s', figurefolder, 'PPR'))
+saveas(gcf, sprintf('%s/%s', figureFolder, 'PPR'))
 
 %%
 tic
@@ -928,7 +779,8 @@ tic
 map = struct( ...
     'AgaTK',     struct('matfile', 'EPSCsAgaTK.mat',   'varname', 'AgaTK'), ...
     'ConoGVIA',  struct('matfile', 'EPSCsConoGVIA.mat',  'varname', 'ConoGVIA'), ...
-    'Muscarine', struct('matfile', 'EPSCsMuscarine.mat',  'varname', 'Muscarine') ...
+    'Muscarine', struct('matfile', 'EPSCsMuscarine.mat',  'varname', 'Muscarine'), ...
+    'WIN', struct('matfile', 'EPSCsWIN.mat',  'varname', 'WIN') ...
     );
 
 % Check Pharm1 is valid
@@ -944,8 +796,8 @@ load(map.(Pharm1).matfile, '-mat');  % This puts e.g. Agasum into the workspace
 SummaryStruct = eval(map.(Pharm1).varname);
 
 % Your existing loop to populate SummaryStruct
-for p = 1:length(pharms)
-    pharm = pharms{p};
+for p = 1:length(conditions)
+    pharm = conditions{p};
     SummStructNumber = size(SummaryStruct.(pharm), 2) + 1;
 
     for h = 1:length(Hzs)
@@ -963,16 +815,16 @@ for p = 1:length(pharms)
         SummaryStruct.(pharm)(SummStructNumber).NormPeaks = Data.(pharm).NormPeaks;
         SummaryStruct.(pharm)(SummStructNumber).PPR = Data.PPR.(pharm);
 
-        if strcmp(pharm, 'Control') && numel(pharms) > 1
-            SummaryStruct.(pharm)(SummStructNumber).Pharmacology = pharms(end);
+        if strcmp(pharm, 'Control') && numel(conditions) > 1
+            SummaryStruct.(pharm)(SummStructNumber).Pharmacology = conditions(end);
             SummaryStruct.Control(SummStructNumber).allTrials = Data.allTrials;
             SummaryStruct.Control(SummStructNumber).basesuballTrials = Data.basesuballTrials;
             SummaryStruct.Control(SummStructNumber).allfirststimPeaks = Data.allfirststimPeaks;
         end
 
-        if ~strcmp(pharm, 'Control')
-            SummaryStruct.(pharm)(SummStructNumber).Concentration = Data.(pharm).Concentration;
-        end
+        % if ~strcmp(pharm, 'Control')
+        %     SummaryStruct.(pharm)(SummStructNumber).Concentration = Data.(pharm).Concentration;
+        % end
 
     end
 end
