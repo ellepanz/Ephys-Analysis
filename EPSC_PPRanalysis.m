@@ -7,33 +7,39 @@
 
 %%
 
-folder = "\\bunson\bunson\Higley_Lab\Lauren bunsen\260501 - LP252 - estim aga AMN082\cell F";
-figureFolder = fullfile(folder, 'Matlab figures');
+folder = "\\bunson\bunson\Higley_Lab\Lauren bunsen\260505 - LP254 - cono amn082 estim\cell B";
+figureFolder = fullfile(folder, 'Matlab figures cell C');
 mkdir(figureFolder)
 addpath(genpath(figureFolder))
 
-Expt.marker = 'LP252f';
-Expt.date = '260501';
+Expt.marker = 'LP254c';
+Expt.date = '260505';
 Expt.internal = 'CsGluc';
-Expt.stim = 'theta';
+Expt.stim = 'theta L2/3';
 Expt.temp = 'RT';
 Expt.CaMg = '1.2mM Ca, 1mM Mg';
 Expt.region = 'V1';
 Expt.trialInterval = 15; % ISI seconds
+Expt.cellType = 'pyramidal L2/3';
 
-ControlTrial = 'e5';         Epoch1 = 'Control';
-      Epoch2 = 'e6';         Pharm1 = 'AgaTK'; % ConoGVIA, can't have -
-      Epoch3 = 'e7';        Pharm2 = 'AgaTK_AMN082';
-Expt.concentrations = {'200nM', '100uM'};
+
+dataset = 'ConoGVIA'; % what datasum variable do you want to pull at the end?
+Epoch1 = 'e8';        Cond1 = 'ConoGVIA';
+Epoch2 = 'e9';        Cond2 = 'ConoGVIA_AMN082'; % ConoGVIA, can't have -
+%Epoch3 = 'e12';        Cond3 = 'ConoGVIA_AMN082';
+Expt.concentrations = {'1uM', '100uM'};
 
 Hzs = {'x1', 'Hz_20'}; % must have letter first
+HzNames = {'1','20Hz'};
+
 ps = arrayfun(@(x) ['p' num2str(x)], 1:numel(Hzs), 'UniformOutput', false);
 
-epochs = {ControlTrial, Epoch2, Epoch3};
-conditions = {Epoch1, Pharm1, Pharm2};
+epochs = {Epoch1, Epoch2};
+conditions = {Cond1, Cond2};
+numPositions = numel(ps);
 
-assignColors(conditions)
-compileEphysData(epochs, folder, conditions, Expt.concentrations, Hzs, Expt, figureFolder);
+assignColors(conditions); Colors
+[Expt, Data] = compileEphysData(epochs, folder, conditions, Hzs, Expt, figureFolder);
 
 %% Delete waves (only delete spiking, trials that are obviously off, not just not averaged for pharmacology)
 clear h; clear lineHandles;
@@ -45,10 +51,10 @@ for p = 1:length(conditions)
     t = tiledlayout(2, 2, 'TileSpacing', 'compact');
     sgtitle(pharm);
 
-    lineHandles = cell(NumPositions, 1);
-    allData = cell(NumPositions, 1);
+    lineHandles = cell(numPositions, 1);
+    allData = cell(numPositions, 1);
 
-    for j = 1:NumPositions
+    for j = 1:numPositions
         Hz = Hzs{j};
 
         nexttile;
@@ -122,10 +128,10 @@ for idx = selectedIdx
     t = tiledlayout(2, 2, 'TileSpacing', 'compact');
     sgtitle(pharmName);
 
-    lineHandles = cell(NumPositions, 1);
-    allData = cell(NumPositions, 1);
+    lineHandles = cell(numPositions, 1);
+    allData = cell(numPositions, 1);
 
-    for j = 1:NumPositions
+    for j = 1:numPositions
         Hz = Hzs{j};
         nexttile;
         hold on;
@@ -253,7 +259,7 @@ disp('Trials compiled and baseline subtracted.')
 % Plot EPSC peaks of all first stims
 
 % Setup figure
-f = figure('Position', [199 256 880 643]);
+f = figure('Position', [199         636        1560         263]);
 hold on;
 xlabel('Trial');
 ylabel('Peak EPSC Amplitude');
@@ -317,7 +323,7 @@ for p = 1:numel(conditions)
     c = colorMap(pharm);  % color for this condition
     pharmLegend = conditions{p};
 
-    % Plot 1 invisible point for legend
+    % % Plot 1 invisible point for legend
     legendHandles(p) = scatter(nan, nan, 40, ...
         'MarkerFaceColor', c, ...
         'MarkerEdgeColor', 'k', ...
@@ -325,7 +331,7 @@ for p = 1:numel(conditions)
 end
 
 % Draw vertical lines every 10 minutes
-legend(legendHandles, 'Location', 'northwest');
+legend(legendHandles, 'Location', 'westoutside');
 lineSpacing = (60/Expt.trialInterval)*5; % 5 minutes
 xMax = ceil(max(timePoints) / 5) * 5;
 xlim([0 xMax]);
@@ -514,7 +520,7 @@ end
 
 % Plot average traces of all freqs and conds List of pharmacology
 
-figure('position',[448 150 1093 772]);
+figure('position',[787   181   536   706]);
 
 for j = 1:length(Hzs)
     Hz = Hzs{j};
@@ -526,13 +532,13 @@ for j = 1:length(Hzs)
         pharmName = conditions{p};
 
         plot(Expt.ms, Data.(pharm).(Hz).avgWave,'DisplayName', pharmName, 'color', color{p},'linewidth',1.5);
-        switch j
-            case 1; xlim([80 200]);
-            case 2; xlim([80 1100]);
-            case 3; xlim([80 400]);
-            case 4; xlim([80 300]);
-        end
-
+        % switch j
+        %     case 1; xlim([80 200]);
+        %     case 2; xlim([80 1100]);
+        %     case 3; xlim([80 400]);
+        %     case 4; xlim([80 300]);
+        % end
+        xlim([0 600])
 
     end
     legend('interpreter', 'tex','location','best')
@@ -558,7 +564,7 @@ for j = 1:length(Hzs)
     % % Now set Y-limits based on that range
     ymin = min(allY);
     ymax = max(allY);
-    ylim([ymin-300, ymax+40]);  % add buffer
+    ylim([ymin-200, ymax+10]);  % add buffer
 end
 saveas(gcf,sprintf('%s/%s', figureFolder, 'averages of all freqs and conds'))
 
@@ -567,7 +573,8 @@ saveas(gcf,sprintf('%s/%s', figureFolder, 'averages of all freqs and conds'))
 minWindows = [];
 minWindows.x1 = [1050 1200];
 % minWindows.x5_5Hz = [1050 1200; 3050 3200; 5050 5200; 7050 7200; 9050 9200];
-minWindows.Hz_20 = [1050 1200; 1550 1700; 2050 2200; 2550 2700; 3050 3200];
+% minWindows.Hz_20 = [1050 1200; 1550 1700; 2050 2200; 2550 2700; 3050 3200];
+minWindows.Hz_20 = [1050 1200; 1550 1700]; % current expts only doing paired pulse not 5stim trains
 % minWindows.x5_40Hz = [1050 1200; 1300 1450; 1550 1700; 1800 1950; 2050 2200];
 
 for p = 1:length(conditions)
@@ -609,31 +616,31 @@ for p = 1:length(conditions)
             Data.(pharm).NormPeaks.(Hz)(1) = Data.(pharm).Peaks.(Hz)/Data.(pharm).Peaks.(Hz);
 
         elseif j > 1
-            for stim = 1:5
+            for stim = 1:numPositions
                 Data.(pharm).NormPeaks.(Hz)(stim) = Data.(pharm).Peaks.(Hz)(1,stim)/Data.(pharm).Peaks.(Hz)(1,1);
             end
         end
     end
 end
+ % Plot normalized peaks
 
-% Plot normalized peaks
-HzNames = {'1','5Hz','20Hz','40Hz'};
-if numel(conditions) >= 2
-    if strcmp(conditions{2}, 'AgaTK')
-        color{2} = colors.Aga;
-    elseif strcmp(conditions{2}, 'CdCl2')
-        color{2} = colors.Cono;
-    end
-end
-
-if numel(conditions) >= 3
-    if contains(conditions{3}, 'CdCl2')
-        color{3} = colors.CdCl2;
-    end
-end
+ % HzNames = {'1','5Hz','20Hz','40Hz'};
+% if numel(conditions) >= 2
+%     if strcmp(conditions{2}, 'AgaTK')
+%         color{2} = colors.Aga;
+%     elseif strcmp(conditions{2}, 'CdCl2')
+%         color{2} = colors.Cono;
+%     end
+% end
+% 
+% if numel(conditions) >= 3
+%     if contains(conditions{3}, 'CdCl2')
+%         color{3} = colors.CdCl2;
+%     end
+% end
 
 figure;
-t = tiledlayout(3,1);
+
 for j = 2:length(Hzs)
     Hz = Hzs{j};
     HzName = HzNames{j};
@@ -647,10 +654,10 @@ for j = 2:length(Hzs)
         pharmName = conditions{p};
         plot(Data.(pharm).NormPeaks.(Hz),'-o','DisplayName', pharmName, 'color', color{p});
         title(HzName)
-        ylim([0 2])
+
         xticks(1:5)
-        xlabel(t,'Stim Number')
-        ylabel(t,'Normalized EPSC amplitude')
+        xlabel('Stim Number')
+        ylabel('Normalized EPSC amplitude')
         yline(1,'--','color',colors.gray)
 
     end
@@ -669,7 +676,7 @@ for p = 1:length(conditions)
         Data.PPR.(pharm).firstPkSubtrd.(Hz) = Data.(pharm).(Hz).avgWave - Data.(pharm).x1.avgWave;
     end
 end
-n = 1:length(Data.Control.x1.avgWave);
+% n = 1:length(Data.Control.x1.avgWave);
 
 
 % Plot overlaid traces
@@ -685,12 +692,12 @@ for p = 1:(length(conditions))-1
         plot(Data.(pharm).x1.avgWave,'--','linewidth',1.5,'color',colors.gray)
         plot(Data.(pharm).(Hz).avgWave,'color',color{2})
         plot(Data.PPR.(pharm).firstPkSubtrd.(Hz),'color',colors.blues.medium)
-        switch j
-            case 1; xlim([800 2000]);
-            case 2; xlim([800 11000]);
-            case 3; xlim([800 4000]);
-            case 4; xlim([800 3000]);
-        end
+        % switch j
+        %     case 1; xlim([800 2000]);
+        %     case 2; xlim([800 11000]);
+        %     case 3; xlim([800 4000]);
+        %     case 4; xlim([800 3000]);
+        % end
         % Calculate ylim
         lines = findall(gca, 'Type', 'line');
 
@@ -743,8 +750,6 @@ for p = 1:2
 end
 disp('PPR calculated.')
 
-% Plot PPR
-HzNames = {'1','5Hz','20Hz','40Hz'};
 
 figure('Position',[680 219 484 659]);
 t = tiledlayout(3,1);
@@ -763,7 +768,6 @@ for j = 2:length(Hzs)
         plot(1,Data.PPR.(pharm).(Hz).PPR,'o','MarkerSize',8, 'color', color{p},'DisplayName',pharmName);
         yline(1,'--','color', colors.grays.medium,'HandleVisibility','off')
         title(HzName)
-        ylim([0 2])
         xticks([])
         ylabel(t,'PPR')
 
@@ -784,16 +788,16 @@ map = struct( ...
     );
 
 % Check Pharm1 is valid
-if ~isfield(map, Pharm1)
+if ~isfield(map, dataset)
     error('Pharm1 "%s" not recognized. Valid options are: %s', ...
-        Pharm1, strjoin(fieldnames(map), ', '));
+        Cond2, strjoin(fieldnames(map), ', '));
 end
 
 % Load the MAT file
-load(map.(Pharm1).matfile, '-mat');  % This puts e.g. Agasum into the workspace
+load(map.(dataset).matfile, '-mat');  % This puts e.g. Agasum into the workspace
 
 % Get the struct into a local variable
-SummaryStruct = eval(map.(Pharm1).varname);
+SummaryStruct = eval(map.(dataset).varname);
 
 % Your existing loop to populate SummaryStruct
 for p = 1:length(conditions)
@@ -830,6 +834,14 @@ for p = 1:length(conditions)
 end
 
 % Assign it back to the original variable name in the workspace
-assignin('base', map.(Pharm1).varname, SummaryStruct);
+assignin('base', map.(dataset).varname, SummaryStruct);
+clear adFields ADName ADNames allData allTrials allY avginghandles avgWindow ax baseline basesub boneMap
+clear c calcRs colIdx endIdx f fieldNames fieldNums firstIdx h Hz HzName hzTrialNames i inRange 
+clear j k lasIdx legendHandles lineHandles lines lineSpacing localMinIdx map matchedCols minCenter minima 
+clear minWindows name nTrials nums order parts peakVals pharm pharmLegend pharmMatch pharmName plotHandles 
+clear row Rs sortedFieldNames sortedStruct sortIdx startIdx stim SummaryStruct SummStructNumber t thisTrialName timePoints
+clear traceColor trial trialCount trialIdx trialLength trialNames trialNamesToAvg vlineTimes wave win
+clear winList x xMax xrange y ymax ymin
 
+    save(fullfile(folder, sprintf('%s.mat', Expt.marker)))
 toc
