@@ -187,7 +187,7 @@ end
 
 
 
-%% Collect all trials, base subtract and calculate minima of first stim. Choose trials for averaging. Plot RS
+%% Collect all trials, base subtract and calculate minima of first stim. Choose trials for averaging. Plot Rs and Rin
 Data.allTrials = {};
 Data.basesuballTrials = struct();
 Data.allfirststimPeaks = struct();
@@ -343,7 +343,7 @@ end
 
 saveas(gcf, sprintf('%s/%s', figureFolder, 'EPSC amplitude peaks over conditions'))
 
-% CREATE GUI TO INPUT FIRST/LAST TRIALS FOR AVERAGING
+%---- CREATE GUI TO INPUT FIRST/LAST TRIALS FOR AVERAGING ----
 % Create figure
 for p = 1:length(conditions)
     pharm = conditions{p};
@@ -381,12 +381,21 @@ for p = 1:length(conditions)
     row = row - 1;
 end
 
-% ---- Calculate Rs ----
+% Submit trials for averaging UI
+uicontrol(f, 'Style','pushbutton','String','Submit', 'Position', [150, 10, 100, 30], ...
+    'callback', @(src, event) submitCallbackEPHYS(f, Data, avginghandles, conditions));
+uiwait(f);  
+close all;
+disp('Submit clicked and figure closed.');
+
+% ---- Calculate Rs and Rin ----
 calcRs = NaN(1,length(fieldNames));
+voltageStep = 0.005; % (V)
 for i = 1:length(fieldNames)
     trial = fieldNames{i};
     wave = Data.basesuballTrials.(trial);
     Rs = abs(5/(wave(12003)-mean(wave(11980:12000)))*1000);
+    Rin = 
     calcRs(i) = Rs;
 end
 
@@ -402,17 +411,6 @@ saveas(gcf,sprintf('%s/%s', figureFolder, 'Rs'))
 ymax = round(max(calcRs))+3;
 ylim([0 ymax]) 
 
-% Submit trials for averaging UI
-uicontrol(f, 'Style','pushbutton','String','Submit', 'Position', [150, 10, 100, 30], ...
-    'callback', @(src, event) submitCallbackEPHYS(f, Data, avginghandles, conditions));
-% Wait for user to press submit
-uiwait(f);  % Execution will pause here
-
-% After user clicks Submit
-close all;  % Or just: close(f);
-
-% Do your next steps here
-disp('Submit clicked and figure closed.');
 
 %% Calculate first stim averages, plot all averages by Hz
 for p = 1:length(conditions)
