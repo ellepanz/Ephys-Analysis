@@ -19,18 +19,18 @@ Expt.genotype = 'WT';
 Expt.startingCond = '1uM TTX, 10uM NBQX';
 Expt.drugCond = '20uM NMDA';
 Expt.drugTime = '2 min';
-S = MINIS_defaultSettings;
+
 
 dataset = Expt.genotype; % what datasum variable do you want to pull at the end?
 Epoch1 = 'e2';        Cond1 = 'TTX_NBQX';
 Epoch2 = 'e3';        Cond2 = 'NMDA'; % ConoGVIA, can't have -
-Epoch3 = 'e4';        Cond3 = 'Washout';
+Epoch3 = 'e4';        Cond3 = 'WashWaste';
+Epoch4 = 'e5';        Cond4 = 'Wash';
 
-epochs = {Epoch1, Epoch2, Epoch3};
-conditions = {Cond1, Cond2, Cond3};
+epochs = {Epoch1, Epoch2, Epoch3, Epoch4};
+conditions = {Cond1, Cond2, Cond3, Cond4};
 
 color = assignColors(conditions); Colors
 [Expt, Data] = compileEphysData_minis(epochs, folder, conditions, Expt, figureFolder);
 
-%% CHOOSE STABLE TRIALS
-Data = MINIS_deleteTrials(Data, S, conditions, figureFolder);
+%% 

@@ -1,75 +1,60 @@
-function MINIS_plotHistograms(Data, color, conditions)
+function MINIS_plotHistograms(Data, S, conditions, color, figureFolder)
+% Plot stable concatenated traces and display histograms for Control/Washout.
 
-condsToPlot = {'TTX_NBQX','Wash'};
+condsToPlot = {S.controlCondition, S.washCondition};
 
-figure('Color','w', ...
-    'Position',[200 200 1100 450]);
+fig = figure('Color','w','Position',[200 100 1200 750]);
+tiledlayout(fig,2,2,'TileSpacing','compact','Padding','compact');
 
-tiledlayout(2,2, ...
-    'TileSpacing','compact', ...
-    'Padding','compact');
-
-%% Get shared Y limits for traces
 allTraceData = [];
-
 for i = 1:numel(condsToPlot)
-
     cond = condsToPlot{i};
-    currentData = Data.(cond).stableConcatData;
-
-    allTraceData = [allTraceData; currentData(:)];
-
+    if ~isfield(Data.(cond),'stableConcatData')
+        error('No stableConcatData found for %s.',cond);
+    end
+    allTraceData = [allTraceData; Data.(cond).stableConcatData(:)]; %#ok<AGROW>
 end
 
-minY = min(allTraceData) * 1.05;
-maxY = max(allTraceData) * 1.05;
+maxAbsY = max(abs(allTraceData));
+if maxAbsY == 0
+    maxAbsY = 1;
+end
+maxAbsY = 1.05*maxAbsY;
 
+histXMin = floor(min(allTraceData)/S.displayBinWidth_pA)*S.displayBinWidth_pA;
+histXMax = ceil(max(allTraceData)/S.displayBinWidth_pA)*S.displayBinWidth_pA;
 
-%% Plot
 for i = 1:numel(condsToPlot)
-
     cond = condsToPlot{i};
+    c = find(strcmp(conditions,cond),1);
+    if isempty(c)
+        error('Condition %s is not in the conditions input.',cond);
+    end
 
-    % Find this condition in original conditions list
-    c = find(strcmp(conditions,cond));
-
-    % IMPORTANT: reload data for this condition
+    % IMPORTANT: load the correct condition inside this plotting loop.
     currentData = Data.(cond).stableConcatData;
 
-    %% Concatenated trace
     nexttile;
+    xSec = (0:numel(currentData)-1)'/S.Fs;
+    plot(xSec,currentData,'Color',color{c});
+    ylabel('Current (pA)');
+    xlabel('Concatenated time (s)');
+    ylim([-maxAbsY maxAbsY]);
+    title([strrep(cond,'_','/') ' stable trials'],'Interpreter','none');
+    box off;
 
-    x = (1:length(currentData))';
-
-    plot(x,currentData, ...
-        'Color',color{c});
-
-    ylabel('pA');
-    xlabel('Sample');
-    ylim([minY maxY]);
-
-    title(strrep(cond,'_','/'), ...
-        'Interpreter','none');
-
-
-    %% Histogram
     nexttile;
-
-    histogram(currentData, ...
-        'BinWidth',5, ...
+    histogram(currentData,'BinWidth',S.displayBinWidth_pA, ...
         'FaceColor',color{c});
-
     xlabel('Current (pA)');
     ylabel('Frequency');
-
-    title(strrep(cond,'_','/'), ...
-        'Interpreter','none');
-
+    xlim([histXMin histXMax]);
+    title([strrep(cond,'_','/') ' all-points histogram'],'Interpreter','none');
     yl = ylim;
-    ylim([0 yl(2)*1.10]);
-
+    ylim([0 max(1,yl(2)*1.10)]);
+    box off;
 end
 
-sgtitle('All-Point Current Histograms');
-
+sgtitle('Stable Trial Concatenation and All-Point Histograms');
+MINIS_saveFigure(fig,figureFolder,'Stable concatenated traces and histograms');
 end
