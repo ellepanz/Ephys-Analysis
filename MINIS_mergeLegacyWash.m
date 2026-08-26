@@ -1,45 +1,64 @@
-function Data = MINIS_mergeLegacyWash(Data, S, removeOldFields)
-% Optional helper for the first experiment in which washout was split into
-% Data.WashWaste and Data.Wash. Creates a canonical Data.Washout condition.
+function Data = MINIS_mergeLegacyWash(Data,removeOldFields)
+% Merge legacy WashWaste + Wash into one canonical Washout condition.
+% The resulting Data.Washout is structured like a normal compiled condition.
 
-if nargin < 3
+if nargin < 2
     removeOldFields = false;
 end
 
 sources = {'WashWaste','Wash'};
-for i = 1:numel(sources)
-    if ~isfield(Data,sources{i})
-        error('Data.%s is missing.',sources{i});
-    end
-end
 
-Washout = struct();
+%% Check fields
 
-% Copy only raw AD0_# trials from both source conditions.
 for i = 1:numel(sources)
     cond = sources{i};
-    [names,~] = MINIS_getTrialInfo(Data,cond);
-    for k = 1:numel(names)
-        Washout.(names{k}) = Data.(cond).(names{k});
+
+    if ~isfield(Data,cond)
+        error('Data.%s is missing.',cond);
+    end
+
+    if ~isfield(Data.rawTraces,cond)
+        error('Data.rawTraces.%s is missing.',cond);
     end
 end
 
-Data.Washout = Washout;
-[names,~] = MINIS_getTrialInfo(Data,'Washout');
-nTrials = numel(names);
+%% Create merged conditions
 
-Data.Washout.miniData = nan(S.miniSamples,nTrials);
-Data.Washout.sealTests = nan(S.sealSamples,nTrials);
+Data.Washout = struct();
+Data.rawTraces.Washout = struct();
 
-for k = 1:nTrials
-    tr = Data.Washout.(names{k});
-    Data.Washout.miniData(:,k) = tr(1:S.miniSamples);
-    Data.Washout.sealTests(:,k) = tr(S.sealStartIdx:S.sealEndIdx);
+%% Copy individual AD0 trials
+
+for i = 1:numel(sources)
+    cond = sources{i};
+
+    fields = fieldnames(Data.(cond));
+    isTrial = ~cellfun('isempty',regexp(fields,'^AD0_\d+$','once'));
+    names = fields(isTrial);
+
+    for k = 1:numel(names)
+        name = names{k};
+        Data.Washout.(name) = Data.(cond).(name);
+        Data.rawTraces.Washout.(name) = Data.rawTraces.(cond).(name);
+    end
 end
 
-Data.Washout.concatData = Data.Washout.miniData(:);
+%% Combine processed data exactly as compileEphysData_minis produced it
+
+Data.Washout.smthdFullTrace = [Data.WashWaste.smthdFullTrace Data.Wash.smthdFullTrace];
+Data.Washout.smthdMinis = [Data.WashWaste.smthdMinis Data.Wash.smthdMinis];
+Data.Washout.testPulse = [Data.WashWaste.testPulse Data.Wash.testPulse];
+
+%% Combine trial identities
+
+Data.Washout.trialNames = [Data.WashWaste.trialNames Data.Wash.trialNames];
+Data.Washout.trialNums = [Data.WashWaste.trialNums Data.Wash.trialNums];
+
+%% Optionally remove legacy condition names
 
 if removeOldFields
     Data = rmfield(Data,sources);
+    Data.rawTraces = rmfield(Data.rawTraces,sources);
 end
+
 end

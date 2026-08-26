@@ -1,95 +1,115 @@
-function [Expt, Data] = compileEphysData_minis(epochs, folder, conditions, Expt, figureFolder)
-% called by MINIS_analysis to build the Data variable and the metadata image
-Data = struct;
+function [Expt, Data] = compileEphysData_minis( ...
+    epochs, folder, conditions, Expt, figureFolder, S)
 
-for j = 1:length(epochs)
+% COMPILEEPHYSDATA_MINIS
+%
+% Loads miniature-current ITX files and organizes individual trials for
+% downstream MINI-IPSC analysis.
+%
+
+% Acquisition timing is taken from S rather than hard-coded here.
+
+%% =========================================================
+% LOAD ITX DATA
+% ==========================================================
+
+Data = struct();
+
+for j = 1:numel(epochs)
     epoch = epochs{j};
     cond = conditions{j};
 
-    % Find all ITX files matching the current epoch
+    % Find ITX files matching this epoch
     FileNames = dir(fullfile(folder, ['*' epoch '*.itx']));
 
+    % Read each matching ITX file
     for k = 1:numel(FileNames)
-        avgdName = FileNames(k).name;
-        fullPath = fullfile(folder, avgdName);
 
-        % Read data and store it
-        data = readITXwaves(fullPath);
-        Data.(cond) = data;
+        fullPath = fullfile(folder, FileNames(k).name);
+        loadedData = readITXwaves(fullPath);
+
+        loadedFields = fieldnames(loadedData);
+
+        % Copy each wave into condition structure
+        for f = 1:numel(loadedFields)
+
+            fieldName = loadedFields{f};
+            Data.rawTraces.(cond).(fieldName) = loadedData.(fieldName);
+        end
     end
 end
 
 
-%% Separate seal tests and mini trial data
- 
-Fs = 10000;              % Sampling rate (Hz)
-sealStart = 19.9;         % Seal test starts at 19.9 sec
-sealDuration = 0.030;     % 30 ms
+%% =========================================================
+% SEPARATE MINI DATA AND TEST PULSES
+% ==========================================================
 
-sealStartIdx = sealStart * Fs + 1;      % 199001
-sealEndIdx = sealStartIdx + sealDuration * Fs - 1;  % 199300
-
-for j = 4:length(conditions)
+for j = 1:numel(conditions)
     cond = conditions{j};
 
-    % Get all fields in this condition
-    fields = fieldnames(Data.(cond));
+    %% Find and sort individual AD0 trials
 
-    % Keep only individual trials: AD0_29, AD0_30, etc. not AD0_avg
-    isTrial = ~cellfun('isempty', regexp(fields, '^AD0_\d+$', 'once'));
+    fields = fieldnames(Data.rawTraces.(cond));
+
+    isTrial = ~cellfun('isempty', ...
+        regexp(fields, '^AD0_\d+$', 'once'));
+
     trialNames = fields(isTrial);
 
-        % Sort trials by their numeric trial number
-    trialNums = cellfun(@(x) sscanf(x, 'AD0_%d'), trialNames);
-    [~, order] = sort(trialNums);
+    if isempty(trialNames)
+        error('No individual AD0_## trials found for %s.', cond);
+    end
+
+    trialNums = cellfun(@(x) ...
+       sscanf(x, 'AD0_%d'), trialNames);
+
+    [trialNums, order] = sort(trialNums);
     trialNames = trialNames(order);
 
-    % Preallocate
-    nTrials = length(trialNames);
-    Data.(cond).sealTests = nan(sealDuration * Fs, nTrials);
-    Data.(cond).miniData = nan(sealStartIdx-1, nTrials);
+    % Keep everything consistently as row vectors
+    trialNums = trialNums(:)';
+    trialNames = trialNames(:)';
 
+    nTrials = numel(trialNames);
+
+
+    %% Preallocate
+    Data.(cond).smthdFullTrace = nan(S.recordingLength*S.Fs, nTrials);
+
+    %% Separate each raw trace
     for k = 1:nTrials
-        trace = Data.(cond).(trialNames{k});
 
-        Data.(cond).sealTests(:,k) = trace(sealStartIdx:sealEndIdx);
-        Data.(cond).miniData(:, k) = trace(1:sealStartIdx-1);
+        fullTrace = Data.rawTraces.(cond).(trialNames{k});
+             
+         % Save the individual raw trial using its original AD0_## name
+        Data.(cond).(trialNames{k}) = fullTrace;
+
+        % Apply Savitsky-Golay filter w/ parameters set in variable S
+        smthdTrace = sgolayfilt(fullTrace, S.sgOrder, S.sgFrame);
+
+        % 
+        Data.(cond).smthdFullTrace(:,k) = smthdTrace; % pulls just the 199000 that are before the test pulse
+        Data.(cond).smthdMinis(:, k) = smthdTrace(1:S.miniSamples);
+
+        % Test pulse
+        Data.(cond).testPulse(:,k) = smthdTrace(S.sealStartIdx:S.sealEndIdx);
     end
+
+    %% Concatenate all mini-current recordings
+    % MATLAB stacks columns sequentially:
+    % trial 1 -> trial 2 -> trial 3 -> ...
+    % Data.(cond).concatData = Data.(cond).smthdMinis(:);
+
+    %% Save trial identity/order
+    Data.(cond).trialNames = trialNames;
+    Data.(cond).trialNums = trialNums;
 end
 
-% --- CONCATENATE TRIAL DATA
-% Use data before seal test
-dataEndIdx = sealStart*Fs;   % 199000
 
-for j = 4:length(conditions)
-    cond = conditions{j};
+%% =========================================================
+% GENERATE METADATA IMAGE
+% ==========================================================
 
-    % Get all fields in this condition
-    fields = fieldnames(Data.(cond));
-
-    % Keep only individual trials not averages
-    isTrial = ~cellfun('isempty', regexp(fields, '^AD0_\d+$', 'once'));
-    trialNames = fields(isTrial);
-
-            % Sort trials by their numeric trial number
-    trialNums = cellfun(@(x) sscanf(x, 'AD0_%d'), trialNames);
-    [~, order] = sort(trialNums);
-    trialNames = trialNames(order);
-
-    % Preallocate concatenated vector
-    nTrials = length(trialNames);
-    Data.(cond).concatData = nan(dataEndIdx * nTrials, 1);
-
-    for k = 1:nTrials
-        trace = Data.(cond).(trialNames{k});
-
-        idx = (k-1)*dataEndIdx + (1:dataEndIdx);
-
-        Data.(cond).concatData(idx) = trace(1:dataEndIdx);
-    end
-end
-
-%% Generate metadata image for printing
 metadataText = sprintf([ ...
     'Experiment: %s\n' ...
     'Date: %s\n' ...
@@ -98,26 +118,39 @@ metadataText = sprintf([ ...
     'Internal: %s\n' ...
     'Holding potential: %s\n' ...
     'Temperature: %s\n' ...
-    'Ca2+:Mg2+ : %s\n' ...
-    'Trial Interval: %d\n' ...
+    'Ca2+/Mg2+: %s\n' ...
     'Genotype: %s\n' ...
     'Mouse Age: %s\n' ...
     'Cell Type: %s\n' ...
-    'Brain Region: %s\n'...
+    'Brain Region: %s\n' ...
     'Folder: %s\n'], ...
-    Expt.marker, Expt.date, ...
-    Expt.startingCond, Expt.drugCond, ... 
-    Expt.temp, Expt.CaMg, Expt.trialInterval, Expt.genotype, Expt.age, Expt.cellType, Expt.region, folder);
+    Expt.marker, ...
+    Expt.date, ...
+    Expt.startingCond, ...
+    Expt.drugCond, ...
+    Expt.internal, ...
+    Expt.Vh, ...
+    Expt.temp, ...
+    Expt.CaMg, ...
+    Expt.genotype, ...
+    Expt.age, ...
+    Expt.cellType, ...
+    Expt.region, ...
+    folder);
 
-fig = figure('Color','w','Position',[100 100 550 600], 'visible','off');
-
-annotation('textbox',[0.05 0.05 0.9 0.9], ...
+fig = figure('Color','w', 'Position',[100 100 600 650], 'Visible','off');
+    
+annotation(fig, ...
+    'textbox', [0.05 0.05 0.9 0.9], ...
     'String', metadataText, ...
-    'FontName','Consolas', ...  % nice monospaced lab vibe
+    'FontName','Consolas', ...
     'FontSize',14, ...
     'Interpreter','none', ...
     'EdgeColor','none');
 
-exportgraphics(fig, sprintf('%s/Experiment_Metadata.png', figureFolder), 'Resolution', 300);
+exportgraphics(fig, ...
+    fullfile(figureFolder, 'Experiment_Metadata.png'), 'Resolution',300);
 
- 
+close(fig);
+
+end

@@ -1,117 +1,234 @@
-function Data = MINIS_calculateTrialMetrics(Data, S, conditions)
-% For every QC-passed trial:
-%   - calculate all-point mean current over the 19.9-s mini trace
-%   - estimate holding current from the final 1 s using Gaussian fit
-%   - calculate series resistance from the test-pulse peak
-%   - calculate steady-state total resistance and corrected input resistance
+function Data = MINIS_calculateTrialMetrics(Data, conditions, S, figureFolder, color)
+% Calculate baseline and resistance metrics for trials that passed MINI QC.
+%
+% Resistance calculations additionally obey the test-pulse QC performed by
+% MINIS_QCTestPulses:
+%
+%   RsValid  = true  -> calculate Rs
+%   RinValid = true  -> calculate Rin
+%
+% A bad test pulse does NOT exclude the trial from MINI-IPSC analysis.
+% It only sets the affected resistance value to NaN.
 
-firstTrialNum = findFirstTrialNum(Data, conditions);
 
+%% =========================================================
+% CALCULATE METRICS
+% ==========================================================
 for c = 1:numel(conditions)
     cond = conditions{c};
 
-    if ~isfield(Data.(cond),'QCTrialNames')
-        error('Run MINIS_deleteTrials before MINIS_calculateTrialMetrics.');
-    end
-
-    trialNames = Data.(cond).QCTrialNames;
-    trialNums = Data.(cond).QCTrialNums;
-    allTrials = Data.(cond).finalMiniData;
+    trialNames = Data.(cond).notDelTrialNames; % take trials remaining after trace QC
+    trialNums  = Data.(cond).notDelTrialNums;
     nTrials = numel(trialNames);
+    RsValid  = Data.(cond).RsValid;
+    RinValid = Data.(cond).RinValid;
 
-    meanCurrent = nan(1,nTrials);
+    %% Preallocate
     baselineCurrent = nan(1,nTrials);
-    baselineSigma = nan(1,nTrials);
-    baselineFitR2 = nan(1,nTrials);
-    Rs = nan(1,nTrials);
+    baselineSigma   = nan(1,nTrials);
+    baselineFitR2   = nan(1,nTrials);
+    Rs     = nan(1,nTrials);
     Rtotal = nan(1,nTrials);
-    Rin = nan(1,nTrials);
-    Ipeak = nan(1,nTrials);
-    Iss = nan(1,nTrials);
-    trialTimeMin = nan(1,nTrials);
+    Rin    = nan(1,nTrials);
+    Ibaseline = nan(1,nTrials);
+    Ipeak     = nan(1,nTrials);
+    Iss       = nan(1,nTrials);
     baselineFits = cell(1,nTrials);
 
+    %% =====================================================
+    % PROCESS EACH TRIAL
+    % ======================================================
     for k = 1:nTrials
-        trace = allTrials(:,k);
-        meanCurrent(k) = mean(trace,'omitnan');
+        trialName = trialNames{k};
 
-        % Last 1 s immediately before the -5 mV test pulse.
-        if numel(trace) < S.baselineSamples
-            error('Trial %s is shorter than the requested baseline window.', trialNames{k});
-        end
-        baselineSegment = trace(end-S.baselineSamples+1:end);
-        fit = MINIS_fitBaseline(baselineSegment, S);
-        baselineFits{k} = fit;
-        baselineCurrent(k) = fit.mu;
-        baselineSigma(k) = fit.sigma;
-        baselineFitR2(k) = fit.R2;
+        %% -------------------------------------------------
+        % Baseline holding current from MINI trace
+        % --------------------------------------------------
+        trial = Data.(cond).notDelMiniData(:,k);
+        fit = MINIS_fitBaseline(trial,S);
 
-        % Pull the seal test directly from the raw AD0 trace so trial identity
-        % cannot become misaligned after manual QC exclusions.
-        rawTrace = Data.(cond).(trialNames{k});
-        if numel(rawTrace) < S.sealEndIdx
-            error('Raw trial %s does not contain the expected test pulse.', trialNames{k});
-        end
+        baselineFits{k}      = fit;
+        baselineCurrent(k)   = fit.mu;
+        baselineSigma(k)     = fit.sigma;
+        baselineFitR2(k)     = fit.R2;
+
+
+        %% -------------------------------------------------
+        % Retrieve original raw trace
+        % --------------------------------------------------
+        rawTrace = Data.rawTraces.(cond).(trialName);
+
+        %% -------------------------------------------------
+        % Baseline immediately before test pulse
+        % --------------------------------------------------
+        % Use 5 ms immediately before the voltage step
+        baselineN = round(5/1000 * S.Fs);
+        baselineRange = ...
+            (S.sealStartIdx-baselineN):(S.sealStartIdx-1);
+
+        Ibaseline(k) = mean(rawTrace(baselineRange),'omitnan');
+
+        %% -------------------------------------------------
+        % Extract test pulse
+        % --------------------------------------------------
         seal = rawTrace(S.sealStartIdx:S.sealEndIdx);
 
-        peakSearchN = min(numel(seal), max(3, round(S.testPeakSearchMs/1000*S.Fs)));
-        if S.testPulse_mV < 0
+        %% -------------------------------------------------
+        % Find initial peak for Rs
+        % --------------------------------------------------
+        peakSearchN = round(S.testPeakSearchMs/1000*S.Fs);
+        peakSearchN = min(peakSearchN,numel(seal));
             [~,peakIdx] = min(seal(1:peakSearchN));
-        else
-            [~,peakIdx] = max(seal(1:peakSearchN));
-        end
 
-        halfWidth = floor(S.testPeakAverageSamples/2);
-        peakRange = max(1,peakIdx-halfWidth):min(numel(seal),peakIdx+halfWidth);
-        Ipeak(k) = mean(seal(peakRange),'omitnan');
+        % % Average several samples around the peak rather than relying
+        % % on one single sample
+        % halfWidth = floor(S.testPeakAverageSamples/2);
+        % 
+        % peakRange = ...
+        %     max(1,peakIdx-halfWidth): ...
+        %     min(numel(seal),peakIdx+halfWidth);
 
-        steadyN = max(1, round(S.testSteadyWindowMs/1000*S.Fs));
-        steadyRange = max(1,numel(seal)-steadyN+1):numel(seal);
+        Ipeak(k) = seal(peakIdx);
+
+        %% -------------------------------------------------
+        % Steady-state current for Rin
+        % --------------------------------------------------
+        steadyN = round(S.testSteadyWindowMs/1000*S.Fs);
+        steadyRange = ...
+            (numel(seal)-steadyN+1):numel(seal);
         Iss(k) = mean(seal(steadyRange),'omitnan');
 
-        deltaIpeak = Ipeak(k) - baselineCurrent(k);
-        deltaIss = Iss(k) - baselineCurrent(k);
 
-        % mV / pA * 1000 = MOhm
-        Rs(k) = 1000 * abs(S.testPulse_mV / deltaIpeak);
-        Rtotal(k) = 1000 * abs(S.testPulse_mV / deltaIss);
+        %% -------------------------------------------------
+        % Resistance calculations
+        % --------------------------------------------------
+        deltaIpeak = Ipeak(k) - Ibaseline(k);
+        deltaIss   = Iss(k)   - Ibaseline(k);
 
-        % For a series access resistance followed by the membrane resistance,
-        % the steady-state voltage-step resistance is Rs + Rin.
-        Rin(k) = Rtotal(k) - Rs(k);
+        % Rs calculation only if initial pulse response passed QC
+        if RsValid(k)
+            Rs(k) = ...
+                1000 * abs(S.testPulse_mV / deltaIpeak);
+        end
 
-        % Plot each 19.9-s mean/baseline point near the center of its acquisition.
-        trialTimeMin(k) = ((trialNums(k)-firstTrialNum)*S.trialStartIntervalSec ...
-            + S.miniDurationSec/2) / 60;
+
+        % Rin requires BOTH a trustworthy steady-state measurement
+        % and a trustworthy Rs measurement
+        if RinValid(k) && RsValid(k)
+            Rtotal(k) = ...
+                1000 * abs(S.testPulse_mV / deltaIss);
+
+            Rin(k) = Rtotal(k) - Rs(k);
+        end
     end
 
-    Data.(cond).meanCurrent = meanCurrent;
+
+    %% =====================================================
+    % STORE RESULTS
+    % ======================================================
+
     Data.(cond).baselineCurrent = baselineCurrent;
-    Data.(cond).baselineSigma = baselineSigma;
-    Data.(cond).baselineFitR2 = baselineFitR2;
-    Data.(cond).Rs = Rs;
-    Data.(cond).Rtotal = Rtotal;
-    Data.(cond).Rin = Rin;
-    Data.(cond).testPulsePeakCurrent = Ipeak;
-    Data.(cond).testPulseSteadyCurrent = Iss;
-    Data.(cond).trialTimeMin = trialTimeMin;
+    Data.(cond).baselineSigma   = baselineSigma;
+    Data.(cond).baselineFitR2   = baselineFitR2;
     Data.(cond).trialBaselineFits = baselineFits;
 
+    Data.(cond).testPulseBaselineCurrent = Ibaseline;
+    Data.(cond).testPulsePeakCurrent     = Ipeak;
+    Data.(cond).testPulseSteadyCurrent   = Iss;
+
+    Data.(cond).Rs     = Rs;
+    Data.(cond).Rtotal = Rtotal;
+    Data.(cond).Rin    = Rin;
+
+
     Data.(cond).trialMetrics = table( ...
-        trialNums(:), trialNames(:), trialTimeMin(:), meanCurrent(:), ...
-        baselineCurrent(:), baselineSigma(:), baselineFitR2(:), ...
-        Rs(:), Rtotal(:), Rin(:), ...
-        'VariableNames', {'TrialNum','TrialName','TimeMin','AllPointMean_pA', ...
-        'Baseline_pA','NoiseSigma_pA','BaselineFitR2','Rs_MOhm', ...
-        'Rtotal_MOhm','Rin_MOhm'});
-end
+        trialNums(:), ...
+        trialNames(:), ...
+        baselineCurrent(:), ...
+        baselineSigma(:), ...
+        baselineFitR2(:), ...
+        RsValid(:), ...
+        RinValid(:), ...
+        Rs(:), ...
+        Rtotal(:), ...
+        Rin(:), ...
+        'VariableNames', { ...
+        'TrialNum', ...
+        'TrialName', ...
+        'Baseline_pA', ...
+        'NoiseSigma_pA', ...
+        'BaselineFitR2', ...
+        'RsValid', ...
+        'RinValid', ...
+        'Rs_MOhm', ...
+        'Rtotal_MOhm', ...
+        'Rin_MOhm'});
+
 end
 
-function firstTrialNum = findFirstTrialNum(Data, conditions)
-allNums = [];
+
+%% =========================================================
+% PLOT Rs AND Rin ACROSS THE ENTIRE EXPERIMENT
+% ==========================================================
+
+fig = figure('Color','w');
+
+tiledlayout(2,1, ...
+    'TileSpacing','compact', ...
+    'Padding','compact');
+
+
+%% Rs
+nexttile
+hold on
+maxY = [];
 for c = 1:numel(conditions)
-    [~,nums] = MINIS_getTrialInfo(Data, conditions{c});
-    allNums = [allNums; nums(:)]; %#ok<AGROW>
+    cond = conditions{c};
+    maxY(c,:) = round(max(Data.(cond).Rs));
+    plot( ...
+        Data.(cond).notDelTrialNums, ...
+        Data.(cond).Rs, ...
+        'o-', ...
+        'LineWidth',1, ...
+        'MarkerFaceColor',color{c}, 'color',color{c},...
+        'DisplayName',strrep(cond,'_','/'));
 end
-firstTrialNum = min(allNums);
+
+ylabel('R_s (M\Omega)')
+maxY_Rs = max(maxY);
+ylim([0 maxY_Rs*1.5])
+xlabel('Trial number')
+title('Series Resistance')
+legend('Location','best')
+box off
+
+
+%% Rin
+nexttile
+hold on
+maxY = [];
+for c = 1:numel(conditions)
+    cond = conditions{c};
+    maxY(c,:) = round(max(Data.(cond).Rin));
+    plot( ...
+        Data.(cond).notDelTrialNums, ...
+        Data.(cond).Rin, ...
+        'o-', ...
+        'LineWidth',1, ...
+        'MarkerFaceColor', color{c}, 'Color',color{c},...
+        'DisplayName',strrep(cond,'_','/'));
+end
+
+ylabel('R_{in} (M\Omega)')
+maxY_Rin = max(maxY);
+ylim([0 maxY_Rin*1.5])
+
+xlabel('Trial number')
+title('Input Resistance')
+legend('Location','best')
+box off
+
+%% Save figure
+    saveas(fig,fullfile(figureFolder,'Rs Rin Stability.fig'));
+    saveas(fig,fullfile(figureFolder,'Rs Rin Stability.png'));
 end

@@ -7,6 +7,7 @@ S.Fs = 10000; % recording rate
 S.trialStartIntervalSec = 30;     % acquisition starts are exactly 30 s apart
 S.miniDurationSec = 19.9;         % usable mini recording before test pulse
 S.baselineWindowSec = 1.0;        % final 1 s used to estimate pre-pulse baseline
+S.recordingLength = 20;
 
 % Test pulse
 S.testPulse_mV = -5;
@@ -18,9 +19,9 @@ S.testSteadyWindowMs = 5.0;       % final 5 ms used for steady-state current
 
 % Glykys/Mody-style all-points histogram baseline fit
 S.fitBinWidth_pA = 0.5;           % fine bins for fitting, not display
-S.fitLeftOffset_pA = 3;           % fit starts 3 pA negative to histogram peak
+S.fitLeftOffset_pA = 1;           % fit starts 3 pA negative to histogram peak
 S.sgOrder = 2;
-S.sgFrame = 11;                   % must be odd
+S.sgFrame = 111;                   % must be odd
 S.maxMuShiftFromPeak_pA = 5;      % keeps nonlinear fit near histogram mode
 
 % Display histograms
