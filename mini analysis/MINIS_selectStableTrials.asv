@@ -1,0 +1,619 @@
+function Data = MINIS_selectStableTrials(Data, S, conditions, color, figureFolder)
+% MINIS_selectStableTrials
+%
+% Plot trial-by-trial recording stability over experimental time and
+% manually select stable Control and Washout periods.
+%
+% Uses trials remaining after trace QC:
+%   Data.(cond).notDelTrialNames
+%   Data.(cond).notDelTrialNums
+%   Data.(cond).notDelMiniData
+%
+% Displays:
+%   1) Gaussian baseline current (mu)
+%   2) Gaussian sigma
+%   3) Series resistance (Rs)
+%   4) Input resistance (Rin)
+%
+% Click the first and last trial of the stable range for Control and
+% Washout. The selected duration is reported in the command window.
+%
+% Test-pulse QC affects Rs/Rin only. A NaN Rs or Rin does NOT remove that
+% trial from the mini-IPSC analysis.
+
+
+%% =========================================================
+% CHECK REQUIRED DATA
+% ==========================================================
+
+for c = 1:numel(conditions)
+
+    cond = conditions{c};
+
+    requiredFields = { ...
+        'notDelTrialNames', ...
+        'notDelTrialNums', ...
+        'notDelMiniData', ...
+        'baselineCurrent', ...
+        'baselineSigma', ...
+        'baselineFitR2', ...
+        'trialBaselineFits', ...
+        'Rs', ...
+        'Rin'};
+
+    for f = 1:numel(requiredFields)
+
+        if ~isfield(Data.(cond), requiredFields{f})
+
+            error('Data.%s.%s does not exist.', ...
+                cond, requiredFields{f});
+
+        end
+
+    end
+
+end
+
+
+%% =========================================================
+% FIND START OF EXPERIMENT
+% ==========================================================
+
+% Use the original raw trial numbers so deleted trials do not shift
+% experimental time.
+
+allTrialNums = [];
+
+for c = 1:numel(conditions)
+
+    cond = conditions{c};
+
+    [~, rawTrialNums] = ...
+        MINIS_getTrialInfo(Data, cond, 'raw');
+
+    allTrialNums = [allTrialNums rawTrialNums];
+
+end
+
+firstTrialNum = min(allTrialNums);
+
+
+%% =========================================================
+% CALCULATE EXPERIMENTAL TIME
+% ==========================================================
+
+conditionStartTimes = nan(1,numel(conditions));
+
+for c = 1:numel(conditions)
+
+    cond = conditions{c};
+
+    trialNums = Data.(cond).notDelTrialNums;
+
+
+    % Time of the CENTER of each 19.9-s mini recording.
+    trialTimeMin = ...
+        ((trialNums - firstTrialNum) * S.trialStartIntervalSec ...
+        + S.miniDurationSec/2) / 60;
+
+    Data.(cond).trialTimeMin = trialTimeMin;
+
+
+    % Find the true beginning of this condition from the original trials.
+    [~, rawTrialNums] = ...
+        MINIS_getTrialInfo(Data, cond, 'raw');
+
+    firstCondTrial = min(rawTrialNums);
+
+    conditionStartTimes(c) = ...
+        ((firstCondTrial - firstTrialNum) * ...
+        S.trialStartIntervalSec) / 60;
+
+end
+
+
+%% =========================================================
+% CREATE STABILITY FIGURE
+% ==========================================================
+
+fig = figure( ...
+    'Color','w', ...
+    'Position',[100 50 1400 900]);
+
+t = tiledlayout(fig,4,1, ...
+    'TileSpacing','compact', ...
+    'Padding','compact');
+
+
+axBase = nexttile(t);
+hold(axBase,'on');
+
+axSigma = nexttile(t);
+hold(axSigma,'on');
+
+axRs = nexttile(t);
+hold(axRs,'on');
+
+axRin = nexttile(t);
+hold(axRin,'on');
+
+
+%% =========================================================
+% PLOT ALL CONDITIONS
+% ==========================================================
+
+for c = 1:numel(conditions)
+
+    cond = conditions{c};
+
+    tm = Data.(cond).trialTimeMin;
+
+
+    %% Gaussian baseline current
+
+    plot(axBase, ...
+        tm, ...
+        Data.(cond).baselineCurrent, ...
+        '-o', ...
+        'Color',color{c}, ...
+        'MarkerFaceColor',color{c}, ...
+        'LineWidth',1.2, ...
+        'DisplayName',strrep(cond,'_','/'));
+
+    %% Gaussian sigma
+
+    plot(axSigma, ...
+        tm, ...
+        Data.(cond).baselineSigma, ...
+        '-o', ...
+        'Color',color{c}, ...
+        'MarkerFaceColor',color{c}, ...
+        'LineWidth',1.2);
+
+    %% Series resistance
+    plot(axRs, ...
+        tm, ...
+        Data.(cond).Rs, ...
+        '-o', ...
+        'Color',color{c}, ...
+        'MarkerFaceColor',color{c}, ...
+        'LineWidth',1.2);
+    ymax = round(max(Data.(cond).Rs));
+    ymax = ymax*1.5;
+    ylim(axRs,[0 ymax])
+
+    %% Input resistance
+    plot(axRin, ...
+        tm, ...
+        Data.(cond).Rin, ...
+        '-o', ...
+        'Color',color{c}, ...
+        'MarkerFaceColor',color{c}, ...
+        'LineWidth',1.2);
+    ymax = round(max(Data.(cond).Rin));
+    ymax = ymax*1.5;
+    ylim(axRin,[0 ymax])
+end
+
+%% Set y-limits using all conditions
+
+allBaseline = [];
+allSigma = [];
+
+for c = 1:numel(conditions)
+    cond = conditions{c};
+    allBaseline = [allBaseline Data.(cond).baselineCurrent];
+    allSigma = [allSigma Data.(cond).baselineSigma];
+end
+
+allBaseline = allBaseline(isfinite(allBaseline));
+allSigma = allSigma(isfinite(allSigma));
+
+ymaxBase = max(abs(allBaseline));
+ylim(axBase,[-1.5*ymaxBase 0]);
+
+ymaxSigma = max(abs(allSigma));
+ylim(axSigma,[0 1.5*ymaxSigma]);
+%% =========================================================
+% DRAW CONDITION BOUNDARIES
+% ==========================================================
+
+axs = [axBase axSigma axRs axRin];
+
+% Start at condition 2 because condition 1 begins the experiment.
+for c = 2:numel(conditions)
+
+    for a = 1:numel(axs)
+
+        xline(axs(a), ...
+            conditionStartTimes(c), ...
+            '--', ...
+            'LineWidth',1.2, ...
+            'Color',[0.4 0.4 0.4], ...
+            'HandleVisibility','off');
+
+    end
+
+end
+
+
+%% =========================================================
+% FORMAT FIGURE
+% ==========================================================
+
+title(t,'Mini-IPSC Trial Stability / QC');
+
+ylabel(axBase,'Gaussian baseline \mu (pA)');
+ylabel(axSigma,'Gaussian \sigma (pA)');
+ylabel(axRs,'R_s (M\Omega)');
+ylabel(axRin,'R_{in} (M\Omega)');
+
+xlabel(axRin,'Experimental time (min)');
+
+legend(axBase,'Location','bestoutside');
+
+linkaxes(axs,'x');
+
+set(axs,'Box','off');
+
+
+%% =========================================================
+% SAVE INITIAL QC FIGURE BEFORE USER SELECTION
+% ==========================================================
+
+% Save the unselected stability/QC plot immediately so a cell that fails
+% stability QC still has a permanent record for the summary PDF. If stable
+% trials are later selected, this same file is overwritten with the final
+% highlighted version.
+if nargin >= 5 && ~isempty(figureFolder)
+    saveStabilityFigure(fig,figureFolder);
+end
+
+
+%% =========================================================
+% GET CONTROL AND WASH CONDITIONS
+% ==========================================================
+
+controlCond = S.controlCondition;
+washCond = S.washCondition;
+
+
+if ~isfield(Data,controlCond)
+
+    error('Control condition "%s" was not found.', ...
+        controlCond);
+
+end
+
+
+if ~isfield(Data,washCond)
+
+    error('Wash condition "%s" was not found.', ...
+        washCond);
+
+end
+
+
+%% =========================================================
+% SELECT STABLE CONTROL RANGE
+% ==========================================================
+
+figure(fig);
+axes(axBase); %#ok<LAXES>
+
+disp(' ');
+disp('Inspect baseline, sigma, Rs, and Rin.');
+disp(['Click FIRST stable ' ...
+    strrep(controlCond,'_','/') ' trial.']);
+
+[x1,~] = ginput(1);
+
+
+disp(['Click LAST stable ' ...
+    strrep(controlCond,'_','/') ' trial.']);
+
+[x2,~] = ginput(1);
+
+
+controlIdx = nearestRange( ...
+    Data.(controlCond).trialTimeMin, ...
+    x1, ...
+    x2);
+
+
+Data = storeStableRange( ...
+    Data, ...
+    controlCond, ...
+    controlIdx);
+
+
+% Report selected duration
+controlDuration = ...
+    Data.(controlCond).trialTimeMin(controlIdx(end)) - ...
+    Data.(controlCond).trialTimeMin(controlIdx(1));
+
+fprintf('\n%s selected duration: %.2f min\n', ...
+    strrep(controlCond,'_','/'), ...
+    controlDuration);
+
+if controlDuration < 5
+
+    warning('%s selected range is less than 5 minutes.', ...
+        controlCond);
+
+end
+
+
+%% =========================================================
+% SELECT STABLE WASHOUT RANGE
+% ==========================================================
+
+figure(fig);
+axes(axBase); %#ok<LAXES>
+
+disp(' ');
+disp(['Click FIRST stable ' ...
+    strrep(washCond,'_','/') ' trial.']);
+
+[x1,~] = ginput(1);
+
+
+disp(['Click LAST stable ' ...
+    strrep(washCond,'_','/') ' trial.']);
+
+[x2,~] = ginput(1);
+
+
+washIdx = nearestRange( ...
+    Data.(washCond).trialTimeMin, ...
+    x1, ...
+    x2);
+
+
+Data = storeStableRange( ...
+    Data, ...
+    washCond, ...
+    washIdx);
+
+
+% Report selected duration
+washDuration = ...
+    Data.(washCond).trialTimeMin(washIdx(end)) - ...
+    Data.(washCond).trialTimeMin(washIdx(1));
+
+fprintf('%s selected duration: %.2f min\n', ...
+    strrep(washCond,'_','/'), ...
+    washDuration);
+
+if washDuration < 5
+
+    warning('%s selected range is less than 5 minutes.', ...
+        washCond);
+
+end
+
+
+%% =========================================================
+% HIGHLIGHT SELECTED CONTROL RANGE
+% ==========================================================
+
+highlightRange( ...
+    axBase, ...
+    Data, ...
+    controlCond, ...
+    controlIdx, ...
+    'baselineCurrent');
+
+highlightRange( ...
+    axSigma, ...
+    Data, ...
+    controlCond, ...
+    controlIdx, ...
+    'baselineSigma');
+
+highlightRange( ...
+    axRs, ...
+    Data, ...
+    controlCond, ...
+    controlIdx, ...
+    'Rs');
+
+highlightRange( ...
+    axRin, ...
+    Data, ...
+    controlCond, ...
+    controlIdx, ...
+    'Rin');
+
+
+%% =========================================================
+% HIGHLIGHT SELECTED WASHOUT RANGE
+% ==========================================================
+
+highlightRange( ...
+    axBase, ...
+    Data, ...
+    washCond, ...
+    washIdx, ...
+    'baselineCurrent');
+
+highlightRange( ...
+    axSigma, ...
+    Data, ...
+    washCond, ...
+    washIdx, ...
+    'baselineSigma');
+
+highlightRange( ...
+    axRs, ...
+    Data, ...
+    washCond, ...
+    washIdx, ...
+    'Rs');
+
+highlightRange( ...
+    axRin, ...
+    Data, ...
+    washCond, ...
+    washIdx, ...
+    'Rin');
+
+
+%% =========================================================
+% OVERWRITE WITH FINAL SELECTED-RANGE FIGURE
+% ==========================================================
+
+if nargin >= 5 && ~isempty(figureFolder)
+    saveStabilityFigure(fig,figureFolder);
+end
+
+end
+
+
+%% =========================================================
+% SAVE STABILITY FIGURE
+% ==========================================================
+
+function saveStabilityFigure(fig,figureFolder)
+
+if ~exist(figureFolder,'dir')
+    mkdir(figureFolder);
+end
+
+figFile = fullfile(figureFolder,'Baseline Sigma Rs Rin Stable Selection.fig');
+pngFile = fullfile(figureFolder,'Baseline Sigma Rs Rin Stable Selection.png');
+
+drawnow;
+
+if isfile(figFile)
+    delete(figFile);
+end
+
+savefig(fig,figFile);
+exportgraphics(fig,pngFile,'Resolution',300);
+
+end
+
+
+%% =========================================================
+% FIND NEAREST SELECTED RANGE
+% ==========================================================
+
+function idx = nearestRange(times,x1,x2)
+
+[~,i1] = min(abs(times-x1));
+[~,i2] = min(abs(times-x2));
+
+idx = min(i1,i2):max(i1,i2);
+
+end
+
+
+%% =========================================================
+% STORE STABLE TRIAL RANGE
+% ==========================================================
+
+function Data = storeStableRange(Data,cond,idx)
+
+% Indices relative to the not-deleted trial arrays
+Data.(cond).stableNotDelIdx = idx;
+
+
+%% Trial identity
+
+Data.(cond).stableTrialNums = ...
+    Data.(cond).notDelTrialNums(idx);
+
+Data.(cond).stableTrialNames = ...
+    Data.(cond).notDelTrialNames(idx);
+
+Data.(cond).stableTrialTimeMin = ...
+    Data.(cond).trialTimeMin(idx);
+
+
+%% Original trial index
+
+if isfield(Data.(cond),'notDelOriginalIdx')
+
+    Data.(cond).stableOriginalIdx = ...
+        Data.(cond).notDelOriginalIdx(idx);
+
+end
+
+
+%% Mini traces
+
+Data.(cond).stableMiniData = ...
+    Data.(cond).notDelMiniData(:,idx);
+
+Data.(cond).stableConcatData = ...
+    Data.(cond).stableMiniData(:);
+
+
+%% Gaussian baseline results
+
+Data.(cond).stableBaselineCurrent = ...
+    Data.(cond).baselineCurrent(idx);
+
+Data.(cond).stableBaselineSigma = ...
+    Data.(cond).baselineSigma(idx);
+
+Data.(cond).stableBaselineFitR2 = ...
+    Data.(cond).baselineFitR2(idx);
+
+Data.(cond).stableTrialBaselineFits = ...
+    Data.(cond).trialBaselineFits(idx);
+
+
+%% Resistance results
+
+Data.(cond).stableRs = ...
+    Data.(cond).Rs(idx);
+
+Data.(cond).stableRin = ...
+    Data.(cond).Rin(idx);
+
+
+if isfield(Data.(cond),'Rtotal')
+
+    Data.(cond).stableRtotal = ...
+        Data.(cond).Rtotal(idx);
+
+end
+
+
+%% Preserve test-pulse QC flags
+
+if isfield(Data.(cond),'RsValid')
+
+    Data.(cond).stableRsValid = ...
+        Data.(cond).RsValid(idx);
+
+end
+
+
+if isfield(Data.(cond),'RinValid')
+
+    Data.(cond).stableRinValid = ...
+        Data.(cond).RinValid(idx);
+
+end
+
+end
+
+
+%% =========================================================
+% HIGHLIGHT STABLE RANGE
+% ==========================================================
+
+function highlightRange(ax,Data,cond,idx,fieldName)
+
+plot(ax, ...
+    Data.(cond).trialTimeMin(idx), ...
+    Data.(cond).(fieldName)(idx), ...
+    'ko', ...
+    'MarkerSize',10, ...
+    'LineWidth',1.8, ...
+    'HandleVisibility','off');
+
+end
