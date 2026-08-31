@@ -1,11 +1,21 @@
 function fit = MINIS_fitBaseline(trial,S)
-% Estimate baseline holding current using a Glykys/Mody-style histogram fit.
+% Estimate holding current and inward synaptic excess from an all-points histogram.
+%
+% The Gaussian is fit only to bins beginning S.fitRightOffset_pA to the
+% right of the histogram peak and extending through the positive tail.
+% The fitted Gaussian is then extrapolated symmetrically over the complete
+% histogram. Excess observed counts on the negative side of the Gaussian
+% mean are treated as inward synaptic excess.
 
 trial = trial(:);
 trial = trial(isfinite(trial));
 
 if isempty(trial)
     error('MINIS_fitBaseline received no finite samples.');
+end
+
+if ~isfield(S,'fitRightOffset_pA')
+    error('S.fitRightOffset_pA is missing. Run the current MINIS_defaultSettings.');
 end
 
 binWidth = S.fitBinWidth_pA;
@@ -24,7 +34,7 @@ centers = edges(1:end-1) + diff(edges)/2;
 [~,peakIdx] = max(pointFreq);
 peakCurrent = centers(peakIdx);
 
-fitStartCurrent = peakCurrent-S.fitLeftOffset_pA;
+fitStartCurrent = peakCurrent + S.fitRightOffset_pA;
 fitMask = centers >= fitStartCurrent & centers <= max(trial);
 
 xFit = centers(fitMask);
@@ -80,8 +90,10 @@ negativeSide = centers < mu;
 synapticExcessCounts = zeros(size(pointFreq));
 synapticExcessCounts(negativeSide) = max(pointFreq(negativeSide)-yAllPred(negativeSide),0);
 
+synapticExcessCount = sum(synapticExcessCounts);
+
 if sum(pointFreq) > 0
-    synapticExcessFraction = sum(synapticExcessCounts)/sum(pointFreq);
+    synapticExcessFraction = synapticExcessCount/sum(pointFreq);
 else
     synapticExcessFraction = NaN;
 end
@@ -93,16 +105,21 @@ fit.R2 = R2;
 fit.peakCurrent = peakCurrent;
 fit.fitStartCurrent = fitStartCurrent;
 fit.binWidth = binWidth;
+
 fit.centers = centers;
 fit.counts = pointFreq;
 fit.pointFreq = pointFreq;
+
 fit.fitMask = fitMask;
 fit.xFit = xFit;
 fit.yFit = yFit;
 fit.yFitPred = yFitPred;
+
 fit.gaussianCounts = yAllPred;
 fit.synapticExcessCounts = synapticExcessCounts;
+fit.synapticExcessCount = synapticExcessCount;
 fit.synapticExcessFraction = synapticExcessFraction;
+
 fit.nPoints = numel(trial);
 
 end

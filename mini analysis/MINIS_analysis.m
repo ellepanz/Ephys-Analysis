@@ -1,15 +1,15 @@
 %% RUN TO ANALYZE MINI-IPSC EXPERIMENTS WITH NMDA INDUCTION +/- FOURTH CONDITION
-
-folder = '\\bunson\bunson\Higley_Lab\Lauren bunsen\260827 - LP287 - mIPSCs 2min NDMA gbz\cell C';
+tic
+folder = '\\bunson\bunson\Higley_Lab\Lauren bunsen\260831 - LP288 - sIPSCs 2min NMDA\cell A';
 figureFolder = fullfile(folder,'Matlab figures');
 mkdir(figureFolder)
 addpath(genpath(figureFolder))
 
 S = MINIS_defaultSettings;
 
-Expt.marker = 'LP287c';
-Expt.date = '260827';
-Expt.age = 'P21';
+Expt.marker = 'LP288a';
+Expt.date = '260831';
+Expt.age = 'P26';
 Expt.internal = 'high Cl- CsGluc';
 Expt.temp = 'RT';
 Expt.Vh = '-70mV';
@@ -18,17 +18,17 @@ Expt.region = 'med PFC';
 Expt.trialInterval = S.trialStartIntervalSec;
 Expt.cellType = 'pyramidal';
 Expt.genotype = 'WT';
-Expt.startingCond = '1uM TTX, 10uM NBQX';
-Expt.drugCond = '200nM AgaTK, 1uM ConoGVIA, 300nM SNX-482';
-Expt.drugTime = 'n/a';
+Expt.startingCond = '10uM NBQX';
+Expt.drugCond = '20uM NMDA';
+Expt.drugTime = '2 min';
 
-Epoch1 = 'e9'; Cond1 = 'TTX_NBQX';
-Epoch2 = 'e10'; Cond2 = 'AgaTK';
-Epoch3 = 'e11'; Cond3 = 'ConoGVIA';
-Epoch4 = 'e12'; Cond4 = 'SNX_482';   % e.g. 'SNX_482, not 'SNX-482', 'AgaTK'
+Epoch1 = 'e2'; Cond1 = 'NBQX';
+Epoch2 = 'e3'; Cond2 = 'NMDA';
+Epoch3 = 'e4'; Cond3 = 'Washout';
+% Epoch4 = 'e12'; Cond4 = 'SNX_482';   % e.g. 'SNX_482, not 'SNX-482', 'AgaTK'
 
-epochs = {Epoch1,Epoch2,Epoch3, Epoch4};
-conditions = {Cond1,Cond2,Cond3, Cond4};
+epochs = {Epoch1,Epoch2,Epoch3};
+conditions = {Cond1,Cond2,Cond3};
 
 % NMDA is retained for QC/stability plotting but excluded from stable-range
 % and final holding/phasic analysis by S.excludedAnalysisConditions.
@@ -52,7 +52,7 @@ MINIS_plotImeanVariability(Data,S,conditions,color,figureFolder,Expt);
 dataFile = fullfile(folder,sprintf('%s_data.mat',Expt.marker));
 save(dataFile,'Data','Expt','S','conditions','color','figureFolder','folder','-v7.3');
 fprintf('Workspace saved.\n');
-
+toc
 return
 %% ADD CELL TO POPULATION
 [Population,PopulationLong] = MINIS_addCellToPopulation(Data,S,Expt,dataFile,conditions);

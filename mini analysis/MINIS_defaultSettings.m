@@ -17,9 +17,9 @@ S.testPeakSearchMs = 2.0;
 S.testPeakAverageSamples = 3;
 S.testSteadyWindowMs = 5.0;
 
-% Glykys/Mody-style all-points histogram baseline fit
+% All-points histogram / Gaussian fit
 S.fitBinWidth_pA = 0.5;
-S.fitLeftOffset_pA = 1;
+S.fitRightOffset_pA = 1;
 S.sgOrder = 2;
 S.sgFrame = 111;
 S.maxMuShiftFromPeak_pA = 5;
@@ -32,8 +32,8 @@ S.controlCondition = 'TTX_NBQX';
 S.drugCondition = 'NMDA';
 S.washCondition = 'Washout';
 
-% Conditions that should be shown for QC but excluded from stable-range,
-% baseline-validation, and final 1-s holding/phasic analyses.
+% Conditions shown for QC but excluded from stable-range,
+% baseline-validation, and final histogram analysis.
 S.excludedAnalysisConditions = {'NMDA'};
 
 % Derived sample indices
