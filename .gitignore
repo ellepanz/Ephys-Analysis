@@ -2,3 +2,5 @@
 
 *.asv
 *.m-
+# MATLAB data files
+*.mat
