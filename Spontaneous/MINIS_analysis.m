@@ -1,15 +1,17 @@
 %% RUN TO ANALYZE MINI-IPSC EXPERIMENTS WITH NMDA INDUCTION +/- FOURTH CONDITION
 tic
-folder = '\\bunson\bunson\Higley_Lab\Lauren bunsen\260831 - LP288 - sIPSCs 2min NMDA\cell A';
+folder = '\\bunson\bunson\Higley_Lab\Lauren bunsen\08 August\260831 - LP288 - sIPSCs 2min NMDA\cell D';
 figureFolder = fullfile(folder,'Matlab figures');
 mkdir(figureFolder)
 addpath(genpath(figureFolder))
 
 S = MINIS_defaultSettings;
 
-Expt.marker = 'LP288a';
+Expt.marker = 'LP288d';
 Expt.date = '260831';
 Expt.age = 'P26';
+Expt.recordingType = 'sIPSC'; % what kind of recording
+Expt.studyID = 'NMDA'; % what overall dataset/population
 Expt.internal = 'high Cl- CsGluc';
 Expt.temp = 'RT';
 Expt.Vh = '-70mV';
@@ -22,9 +24,9 @@ Expt.startingCond = '10uM NBQX';
 Expt.drugCond = '20uM NMDA';
 Expt.drugTime = '2 min';
 
-Epoch1 = 'e2'; Cond1 = 'NBQX';
-Epoch2 = 'e3'; Cond2 = 'NMDA';
-Epoch3 = 'e4'; Cond3 = 'Washout';
+Epoch1 = 'e8'; Cond1 = 'NBQX';
+Epoch2 = 'e9'; Cond2 = 'NMDA';
+Epoch3 = 'e10'; Cond3 = 'Washout';
 % Epoch4 = 'e12'; Cond4 = 'SNX_482';   % e.g. 'SNX_482, not 'SNX-482', 'AgaTK'
 
 epochs = {Epoch1,Epoch2,Epoch3};
@@ -45,8 +47,11 @@ Data = MINIS_deleteTrials(Data,S,conditions,figureFolder,'raw');
 Data = MINIS_calculateTrialMetrics(Data,conditions,S,figureFolder,color);
 Data = MINIS_selectStableTrials(Data,S,conditions,color,figureFolder, Expt);
 MINIS_plotBaselineValidation(Data,S,conditions,color,figureFolder, Expt);
-Data = MINIS_calculateImean(Data,S,conditions);
-MINIS_plotImeanVariability(Data,S,conditions,color,figureFolder,Expt);
+Data = MINIS_calculateHistogramMetrics(Data,S,conditions);
+MINIS_plotSynapticExcessVariability(Data,S,conditions,color,figureFolder,Expt);
+
+% Data = MINIS_calculateImean(Data,S,conditions); % use for original analysis calculating current mean
+% MINIS_plotImeanVariability(Data,S,conditions,color,figureFolder,Expt); % use for original analysis 
 
 %% SAVE CELL DATA
 dataFile = fullfile(folder,sprintf('%s_data.mat',Expt.marker));
@@ -59,10 +64,10 @@ return
 
 %% CREATE CELL SUMMARY PDF
 [pdfFile,BinderIndex] = MINIS_createCellSummaryPDF(Expt,figureFolder,true,conditions);
-% MINIS_rebuildBinder;
+% binderFile = MINIS_rebuildBinder(Expt)
 
 %% PLOT POPULATION DATA
-MINIS_plotPopulation;
+MINIS_plotPopulation(Expt);
 
 %% EXPORT FOR PRISM
-MINIS_exportForPrism;
+MINIS_exportForPrism(Expt,S);

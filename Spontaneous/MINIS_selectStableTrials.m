@@ -80,10 +80,21 @@ for c = 1:numel(conditions)
 end
 
 % Holding-current scale intentionally ignores NMDA/anomaly conditions.
-holdingForLimits = collectFiniteField(Data,analysisConditions,'baselineCurrent');
+holdingForLimits = collectTailFiniteField(Data,analysisConditions,'baselineCurrent',10);
 allSigma = collectFiniteField(Data,conditions,'baselineSigma');
 allRs = collectFiniteField(Data,conditions,'Rs');
 allRin = collectFiniteField(Data,conditions,'Rin');
+
+fprintf('\nBaseline-current y-limit calculation:\n');
+
+for c = 1:numel(analysisConditions)
+    cond = analysisConditions{c};
+    vals = Data.(cond).baselineCurrent;
+    fprintf('%s: min = %.1f, max = %.1f, max abs = %.1f pA\n', ...
+        cond,min(vals,[],'omitnan'),max(vals,[],'omitnan'),max(abs(vals),[],'omitnan'));
+end
+
+fprintf('Combined max abs = %.1f pA\n',max(abs(holdingForLimits)));
 
 if isempty(holdingForLimits)
     ylim(axBase,[-1 0]);
@@ -108,7 +119,7 @@ for c = 2:numel(conditions)
     end
 end
 
-title(t,sprintf('%s %s', 'Mini-IPSC Trial Stability / QC, Experiment', Expt.marker))
+title(t,sprintf('%s %s', 'Trial Stability / QC, Experiment', Expt.marker))
 ylabel(axBase,'Gaussian baseline \mu (pA)');
 ylabel(axSigma,'Gaussian \sigma (pA)');
 ylabel(axRs,'R_s (M\Omega)');
@@ -165,7 +176,7 @@ if isfield(S,'excludedAnalysisConditions')
 elseif isfield(S,'drugCondition')
     excluded = {S.drugCondition};
 else
-    excluded = {'NMDA'};
+    fprintf('No conditions excluded from analysis.\n');
 end
 
 mask = ~ismember(lower(string(conditions)),lower(string(excluded)));
@@ -193,17 +204,34 @@ exportgraphics(fig,pngFile,'Resolution',300);
 
 end
 
-function vals = collectFiniteField(Data,conditions,fieldName)
+function vals = collectFiniteField(Data,analysisConditions,fieldName)
 
 vals = [];
 
-for c = 1:numel(conditions)
-    vals = [vals; Data.(conditions{c}).(fieldName)(:)];
+for c = 1:numel(analysisConditions)
+    vals = [vals; Data.(analysisConditions{c}).(fieldName)(:)];
 end
 
 vals = vals(isfinite(vals));
 
 end
+
+
+function vals = collectTailFiniteField(Data,conditions,fieldName,nTrials)
+
+vals = [];
+
+for c = 1:numel(conditions)
+    x = Data.(conditions{c}).(fieldName);
+    startIdx = max(1,numel(x)-nTrials+1);
+    tail = x(startIdx:end);
+    vals = [vals; tail(:)];
+end
+
+vals = vals(isfinite(vals));
+
+end
+
 
 function ymax = paddedPositiveMax(vals)
 

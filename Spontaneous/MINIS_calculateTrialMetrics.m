@@ -53,7 +53,7 @@ for c = 1:numel(conditions)
         idx = originalIdx(k);
 
         % 5 ms immediately before test-pulse onset
-        fullTrace = Data.(cond).smthdFullTrace(:,idx);
+        fullTrace = Data.rawTraces.(cond).(trialNames{k});
 
         baselineN = round(5/1000*S.Fs);
         baselineRange = (S.sealStartIdx-baselineN):(S.sealStartIdx-1);

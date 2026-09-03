@@ -28,7 +28,7 @@ S.maxMuShiftFromPeak_pA = 5;
 S.displayBinWidth_pA = 5;
 
 % Canonical condition names
-S.controlCondition = 'TTX_NBQX';
+S.controlCondition = 'NBQX';
 S.drugCondition = 'NMDA';
 S.washCondition = 'Washout';
 
