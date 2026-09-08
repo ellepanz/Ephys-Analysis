@@ -1,14 +1,10 @@
-function [pdfFile,BinderIndex] = MINIS_createCellSummaryPDF(Expt,figureFolder,includeValidationPages,conditions)
+function [pdfFile,BinderIndex] = MINIS_createCellSummaryPDF(Expt,figureFolder,includeValidationPages,conditions,dataFile)
 % Create/update the printable PDF packet for one MINIS cell.
 %
 % includeValidationPages = true/false
 %
-% Creates:
-%   LP279b_summary.pdf
-%   LP279b_summary.fig
-%
-% Also updates BinderIndex so MINIS_rebuildBinder knows where this cell's
-% current files are and whether validation pages should be included.
+% BinderIndex is recording-type-wide. Population membership is study-specific
+% and is stored in BinderIndex.IncludeInPopulation.
 
 if nargin < 3
     includeValidationPages = false;
@@ -18,11 +14,13 @@ if nargin < 4
     conditions = {};
 end
 
+if nargin < 5
+    dataFile = '';
+end
+
 %% FILES
 
 paths = MINIS_getPopulationPaths(Expt);
-
-populationFolder = paths.folder;
 populationFile = paths.populationFile;
 binderIndexFile = paths.binderIndexFile;
 
@@ -34,7 +32,12 @@ summaryFile = fullfile(figureFolder,'Holding Synaptic Excess Variability.png');
 
 pdfFile = fullfile(cellFolder,sprintf('%s_summary.pdf',Expt.marker));
 summaryFigFile = fullfile(cellFolder,sprintf('%s_summary.fig',Expt.marker));
-dataFile = fullfile(cellFolder,sprintf('%s_data.mat',Expt.marker));
+
+if strlength(string(dataFile)) == 0
+    dataFile = resolveDataFile(cellFolder,Expt.marker,binderIndexFile);
+else
+    dataFile = char(string(dataFile));
+end
 
 if ~isfile(stabilityFile)
     error('Stability figure not found: %s',stabilityFile);
@@ -43,19 +46,40 @@ end
 hasBaselineValidation = isfile(baselineValidationFile);
 hasSummary = isfile(summaryFile);
 
+%% LOAD/UPGRADE BINDER INDEX
+
+BinderIndex = table;
+hadPopulationDecision = false;
+
+if isfile(binderIndexFile)
+    tmp = load(binderIndexFile,'BinderIndex');
+
+    if isfield(tmp,'BinderIndex') && istable(tmp.BinderIndex)
+        hadPopulationDecision = ismember('IncludeInPopulation',tmp.BinderIndex.Properties.VariableNames);
+        BinderIndex = upgradeBinderIndex(tmp.BinderIndex);
+    end
+end
 
 %% IS THIS CELL IN THE POPULATION?
 
 includeInPopulation = false;
+exclusionReason = "";
+existingIdx = [];
 
-if isfile(populationFile)
+if ~isempty(BinderIndex)
+    existingIdx = find(string(BinderIndex.Marker) == string(Expt.marker));
+end
+
+if ~isempty(existingIdx) && hadPopulationDecision
+    includeInPopulation = BinderIndex.IncludeInPopulation(existingIdx(1));
+    exclusionReason = string(BinderIndex.ExclusionReason(existingIdx(1)));
+elseif ~isempty(populationFile) && isfile(populationFile)
     tmp = load(populationFile,'Population');
 
     if isfield(tmp,'Population') && istable(tmp.Population) && ismember('CellID',tmp.Population.Properties.VariableNames)
         includeInPopulation = any(string(tmp.Population.CellID) == string(Expt.marker));
     end
 end
-
 
 %% METADATA
 
@@ -79,18 +103,16 @@ metaLines = [
 
 metadataText = strjoin(metaLines,newline);
 
-
 %% CREATE LETTER-SIZE SUMMARY PAGE
 
 fig = figure('Color','w','Units','inches','Position',[1 1 8.5 11],'Visible','off','MenuBar','none','ToolBar','none','NumberTitle','off');
 
-% Forces exportgraphics to retain the full 8.5 x 11 page
 annotation(fig,'rectangle',[0.001 0.001 0.998 0.998],'Color','w','FaceColor','none','LineWidth',0.01);
 
 pageWidth = 8.5;
 pageHeight = 11;
 
-leftMargin = 0.85/pageWidth;      % room for 3-hole punch
+leftMargin = 0.85/pageWidth;
 rightMargin = 0.40/pageWidth;
 topMargin = 0.40/pageHeight;
 bottomMargin = 0.40/pageHeight;
@@ -100,13 +122,11 @@ contentBottom = bottomMargin;
 contentWidth = 1-leftMargin-rightMargin;
 contentHeight = 1-topMargin-bottomMargin;
 
-
 %% TITLE
 
 annotation(fig,'textbox',[contentLeft contentBottom+0.955*contentHeight contentWidth 0.03], ...
     'String',sprintf('%s Summary',Expt.marker),'FontSize',14,'FontWeight','bold', ...
     'EdgeColor','none','HorizontalAlignment','center');
-
 
 %% POPULATION CHECKBOX
 
@@ -126,6 +146,11 @@ annotation(fig,'textbox',[boxX+0.035 boxY-0.005 0.50 0.03], ...
     'String','Include in population analysis?','FontSize',10.5, ...
     'EdgeColor','none','VerticalAlignment','middle');
 
+if ~includeInPopulation && strlength(exclusionReason) > 0
+    annotation(fig,'textbox',[boxX+0.035 boxY-0.035 contentWidth-0.04 0.03], ...
+        'String',"Reason: " + exclusionReason,'FontSize',8.5,'Interpreter','none', ...
+        'EdgeColor','none','VerticalAlignment','middle');
+end
 
 %% METADATA
 
@@ -133,7 +158,6 @@ metadataPosition = [contentLeft contentBottom+0.70*contentHeight contentWidth 0.
 
 annotation(fig,'textbox',metadataPosition,'String',metadataText,'FontName','Consolas', ...
     'FontSize',8.5,'Interpreter','none','EdgeColor','none','VerticalAlignment','top');
-
 
 %% ANALYSIS FIGURES
 
@@ -166,7 +190,6 @@ end
 
 savefig(fig,summaryFigFile);
 
-
 %% CREATE INDIVIDUAL CELL PDF
 
 if isfile(pdfFile)
@@ -174,7 +197,6 @@ if isfile(pdfFile)
 end
 
 exportgraphics(fig,pdfFile,'ContentType','vector','BackgroundColor','white');
-
 
 %% ADD VALIDATION PAGES TO INDIVIDUAL CELL PDF
 
@@ -191,25 +213,18 @@ end
 
 delete(fig);
 
-
 %% UPDATE BINDER INDEX
 
 newRow = table(string(Expt.marker),string(Expt.recordingType),string(Expt.studyID), ...
     string(dataFile),string(figureFolder),string(summaryFigFile),string(pdfFile), ...
-    logical(includeValidationPages),datetime('now'), ...
+    logical(includeValidationPages),logical(includeInPopulation),string(exclusionReason),datetime('now'), ...
     'VariableNames',{'Marker','RecordingType','StudyID','DataFile','FigureFolder', ...
-    'SummaryFig','SummaryPDF','IncludeValidation','LastUpdated'});
+    'SummaryFig','SummaryPDF','IncludeValidation','IncludeInPopulation','ExclusionReason','LastUpdated'});
 
-if isfile(binderIndexFile)
-    tmp = load(binderIndexFile,'BinderIndex');
-
-    if isfield(tmp,'BinderIndex')
-        BinderIndex = tmp.BinderIndex;
-    else
-        BinderIndex = newRow([],:);
-    end
-else
+if isempty(BinderIndex)
     BinderIndex = newRow([],:);
+else
+    BinderIndex = upgradeBinderIndex(BinderIndex);
 end
 
 existingIdx = find(string(BinderIndex.Marker) == string(Expt.marker));
@@ -233,7 +248,98 @@ fprintf('Population inclusion: %s\n',string(includeInPopulation));
 
 end
 
+%% UPGRADE/ORDER BINDER INDEX
 
+function BinderIndex = upgradeBinderIndex(BinderIndex)
+
+n = height(BinderIndex);
+
+if ~ismember('Marker',BinderIndex.Properties.VariableNames)
+    error('BinderIndex is missing Marker.');
+end
+if ~ismember('RecordingType',BinderIndex.Properties.VariableNames)
+    BinderIndex.RecordingType = strings(n,1);
+end
+if ~ismember('StudyID',BinderIndex.Properties.VariableNames)
+    BinderIndex.StudyID = strings(n,1);
+end
+if ~ismember('DataFile',BinderIndex.Properties.VariableNames)
+    BinderIndex.DataFile = strings(n,1);
+end
+if ~ismember('FigureFolder',BinderIndex.Properties.VariableNames)
+    BinderIndex.FigureFolder = strings(n,1);
+end
+if ~ismember('SummaryFig',BinderIndex.Properties.VariableNames)
+    BinderIndex.SummaryFig = strings(n,1);
+end
+if ~ismember('SummaryPDF',BinderIndex.Properties.VariableNames)
+    BinderIndex.SummaryPDF = strings(n,1);
+end
+if ~ismember('IncludeValidation',BinderIndex.Properties.VariableNames)
+    BinderIndex.IncludeValidation = false(n,1);
+end
+if ~ismember('IncludeInPopulation',BinderIndex.Properties.VariableNames)
+    BinderIndex.IncludeInPopulation = false(n,1);
+end
+if ~ismember('ExclusionReason',BinderIndex.Properties.VariableNames)
+    BinderIndex.ExclusionReason = strings(n,1);
+end
+if ~ismember('LastUpdated',BinderIndex.Properties.VariableNames)
+    BinderIndex.LastUpdated = NaT(n,1);
+end
+
+vars = {'Marker','RecordingType','StudyID','DataFile','FigureFolder','SummaryFig', ...
+    'SummaryPDF','IncludeValidation','IncludeInPopulation','ExclusionReason','LastUpdated'};
+BinderIndex = BinderIndex(:,vars);
+
+end
+
+%% RESOLVE CURRENT DATA FILE
+
+function dataFile = resolveDataFile(cellFolder,marker,binderIndexFile)
+
+candidateFiles = [dir(fullfile(cellFolder,[marker '.mat'])); dir(fullfile(cellFolder,[marker '_data.mat']))];
+
+if isempty(candidateFiles)
+    error('No saved data file found for %s in %s.',marker,cellFolder);
+end
+
+matches = string(fullfile({candidateFiles.folder},{candidateFiles.name}))';
+
+if numel(matches) == 1
+    dataFile = char(matches);
+    return
+end
+
+if isfile(binderIndexFile)
+    tmp = load(binderIndexFile,'BinderIndex');
+
+    if isfield(tmp,'BinderIndex') && istable(tmp.BinderIndex) && ...
+            ismember('Marker',tmp.BinderIndex.Properties.VariableNames) && ...
+            ismember('DataFile',tmp.BinderIndex.Properties.VariableNames)
+        idx = find(string(tmp.BinderIndex.Marker) == string(marker),1);
+
+        if ~isempty(idx)
+            requestedFile = string(tmp.BinderIndex.DataFile(idx));
+            [~,requestedName,requestedExt] = fileparts(requestedFile);
+            requestedBase = requestedName + requestedExt;
+
+            [~,names,exts] = cellfun(@fileparts,cellstr(matches),'UniformOutput',false);
+            candidateBase = string(strcat(names,exts));
+            sameName = strcmpi(candidateBase,requestedBase);
+
+            if sum(sameName) == 1
+                dataFile = char(matches(sameName));
+                return
+            end
+        end
+    end
+end
+
+error('Multiple saved data files found for %s. Pass the active dataFile as the fifth input.\n%s', ...
+    marker,strjoin(matches,newline));
+
+end
 %% ADD IMAGE TO PAGE
 
 function addImageToPage(fig,imageFile,position)

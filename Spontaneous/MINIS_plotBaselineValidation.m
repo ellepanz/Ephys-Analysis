@@ -93,6 +93,9 @@ end
 
 %% DETAILED TRACE + HISTOGRAM VALIDATION
 
+
+end
+
 for c = 1:numel(validationConditions)
     cond = validationConditions{c};
     idx = Data.(cond).stableNotDelIdx;
@@ -149,8 +152,7 @@ for c = 1:numel(validationConditions)
             plot(axHist,fit.centers,fit.gaussianCounts,'-','Color',condColor,'LineWidth',1.8);
             plot(axHist,fit.xFit,fit.yFit,'o','Color',condColor,'MarkerSize',3);
 
-            xline(axHist,fit.peakCurrent,':','LineWidth',1);
-            xline(axHist,fit.fitStartCurrent,'--','LineWidth',1);
+            xline(axHist,fit.peakCurrent,'--','LineWidth',1);
             xline(axHist,fit.mu,'-.','\mu','LineWidth',1.2);
 
             ylabel(axHist,'Point count');
@@ -197,6 +199,4 @@ else
     if ~isfinite(ymax) || ymax <= 0
         ymax = 1;
     end
-end
-
 end

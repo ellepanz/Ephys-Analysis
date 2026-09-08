@@ -1,15 +1,17 @@
 function binderFile = MINIS_rebuildBinder(Expt)
-% Rebuild the complete binder for the population defined by
-% Expt.recordingType and Expt.studyID.
+% Rebuild the complete binder for one recording type.
 %
-% Cells are ordered by Marker.
-% Validation pages are included according to BinderIndex.IncludeValidation.
-% The old binder is replaced completely.
+% Expt.recordingType is required. Expt.studyID is ignored for binder scope.
+% Cells are ordered by Marker. Validation pages are included according to
+% BinderIndex.IncludeValidation.
 
 tic
 
-paths = MINIS_getPopulationPaths(Expt);
+if ~isfield(Expt,'recordingType') || isempty(Expt.recordingType)
+    error('Expt.recordingType must be defined.');
+end
 
+paths = MINIS_getPopulationPaths(Expt);
 binderIndexFile = paths.binderIndexFile;
 binderFile = paths.binderFile;
 
@@ -18,21 +20,42 @@ if ~isfile(binderIndexFile)
 end
 
 tmp = load(binderIndexFile,'BinderIndex');
+
+if ~isfield(tmp,'BinderIndex') || ~istable(tmp.BinderIndex)
+    error('BinderIndex file does not contain a BinderIndex table.');
+end
+
 BinderIndex = tmp.BinderIndex;
+
+if ismember('RecordingType',BinderIndex.Properties.VariableNames)
+    recordingType = string(Expt.recordingType);
+    rowType = strtrim(string(BinderIndex.RecordingType));
+    keep = strlength(rowType) > 0 & strcmpi(rowType,recordingType);
+
+    if any(~keep)
+        warning('%d BinderIndex row(s) do not match recordingType %s and will be skipped.', ...
+            sum(~keep),recordingType);
+    end
+
+    BinderIndex = BinderIndex(keep,:);
+end
 
 BinderIndex = sortrows(BinderIndex,'Marker');
 
-if isfile(binderFile)
-    try
-        delete(binderFile);
-    catch
-        error('Could not replace the binder PDF. Make sure it is closed and try again.');
-    end
+if isempty(BinderIndex)
+    error('No BinderIndex rows remain for recordingType %s.',string(Expt.recordingType));
+end
+
+[binderFolder,binderName,binderExt] = fileparts(binderFile);
+tempBinder = fullfile(binderFolder,[binderName '_building' binderExt]);
+
+if isfile(tempBinder)
+    delete(tempBinder);
 end
 
 firstPage = true;
 
-%% BUILD BINDER
+%% BUILD TEMP BINDER
 
 for c = 1:height(BinderIndex)
 
@@ -52,10 +75,10 @@ for c = 1:height(BinderIndex)
     fig = openfig(summaryFigFile,'invisible');
 
     if firstPage
-        exportgraphics(fig,binderFile,'ContentType','vector','BackgroundColor','white');
+        exportgraphics(fig,tempBinder,'ContentType','vector','BackgroundColor','white');
         firstPage = false;
     else
-        exportgraphics(fig,binderFile,'ContentType','vector','BackgroundColor','white','Append',true);
+        exportgraphics(fig,tempBinder,'ContentType','vector','BackgroundColor','white','Append',true);
     end
 
     delete(fig);
@@ -71,7 +94,7 @@ for c = 1:height(BinderIndex)
             validationFile = fullfile(validationFiles(k).folder,validationFiles(k).name);
             fig = createValidationPage(validationFile,marker);
 
-            exportgraphics(fig,binderFile,'ContentType','vector','BackgroundColor','white','Append',true);
+            exportgraphics(fig,tempBinder,'ContentType','vector','BackgroundColor','white','Append',true);
 
             delete(fig);
         end
@@ -82,11 +105,22 @@ if firstPage
     error('No valid cell summary figures were found. Binder was not created.');
 end
 
+%% REPLACE OLD BINDER ONLY AFTER NEW ONE WAS BUILT SUCCESSFULLY
+
+try
+    if isfile(binderFile)
+        delete(binderFile);
+    end
+    movefile(tempBinder,binderFile);
+catch ME
+    warning('New binder was built at %s but the existing binder could not be replaced.',tempBinder);
+    rethrow(ME);
+end
+
 fprintf('\nBinder rebuilt successfully:\n%s\n',binderFile);
 toc
 
 end
-
 
 %% CREATE VALIDATION PAGE
 
@@ -131,7 +165,6 @@ axis(ax,'off');
 
 end
 
-
 %% FIND VALIDATION FILES
 
 function files = getValidationFiles(figureFolder)
@@ -166,7 +199,6 @@ orderTable = sortrows(orderTable,{'Condition','Page'});
 files = files(orderTable.Idx);
 
 end
-
 
 %% CROP IMAGE
 

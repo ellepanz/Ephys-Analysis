@@ -1,25 +1,32 @@
 function Data = MINIS_calculateTrialMetrics(Data,conditions,S,figureFolder,color)
 % Calculate baseline-fit and resistance metrics for all experimental conditions.
 %
-% Rs and Rin are calculated for every trial remaining after MINI trace QC.
-% Test pulses come from Data.(cond).testPulse, created by
-% compileEphysData_minis. No separate test-pulse QC is applied.
+% For every trial remaining after trace QC:
+%   - Fit the full mini-current trace to estimate baseline mu, sigma, and R2.
+%   - Calculate Rs and Rin from the RAW test pulse.
+%
+% These metrics are used for stability/QC and stable-trial selection.
+% Final synaptic charge/current is calculated later by
+% MINIS_calculateHistogramMetrics.
 
 for c = 1:numel(conditions)
+
     cond = conditions{c};
 
     trialNames = Data.(cond).notDelTrialNames;
     trialNums = Data.(cond).notDelTrialNums;
     nTrials = numel(trialNames);
 
-    % testPulse/smthdFullTrace contain all originally compiled trials.
-    % Match the remaining trials back to their original columns.
+    %% MATCH REMAINING TRIALS TO ORIGINAL TRIALS
+
     [found,originalIdx] = ismember(trialNames,Data.(cond).trialNames);
 
     if any(~found)
         missingTrials = strjoin(trialNames(~found),', ');
         error('Could not match remaining trials in %s: %s',cond,missingTrials);
     end
+
+    %% PREALLOCATE
 
     baselineCurrent = nan(1,nTrials);
     baselineSigma = nan(1,nTrials);
@@ -35,11 +42,14 @@ for c = 1:numel(conditions)
 
     baselineFits = cell(1,nTrials);
 
+    %% ANALYZE TRIALS
+
     for k = 1:nTrials
 
         %% BASELINE FIT
 
         trial = Data.(cond).notDelMiniData(:,k);
+
         fit = MINIS_fitBaseline(trial,S);
 
         baselineFits{k} = fit;
@@ -47,29 +57,38 @@ for c = 1:numel(conditions)
         baselineSigma(k) = fit.sigma;
         baselineFitR2(k) = fit.R2;
 
-
-        %% TEST PULSE
+        %% RAW TEST PULSE
 
         idx = originalIdx(k);
 
-        % 5 ms immediately before test-pulse onset
-        fullTrace = Data.rawTraces.(cond).(trialNames{k});
+        rawTrace = Data.rawTraces.(cond).(trialNames{k});
+        rawTrace = rawTrace(:);
 
+        % Mean current during 5 ms immediately before test-pulse onset.
         baselineN = round(5/1000*S.Fs);
         baselineRange = (S.sealStartIdx-baselineN):(S.sealStartIdx-1);
-        Ibaseline(k) = mean(fullTrace(baselineRange),'omitnan');
 
-        % Compiled/smoothed test pulse
-        seal = Data.(cond).testPulse(:,idx);
+        Ibaseline(k) = mean(rawTrace(baselineRange),'omitnan');
 
-        peakSearchN = min(round(S.testPeakSearchMs/1000*S.Fs),numel(seal));
+        % Pull test pulse directly from raw trace.
+        seal = rawTrace(S.sealStartIdx:S.sealEndIdx);
+
+        % Find capacitive peak during initial search window.
+        peakSearchN = min( ...
+            round(S.testPeakSearchMs/1000*S.Fs), ...
+            numel(seal));
+
         [~,peakIdx] = min(seal(1:peakSearchN));
         Ipeak(k) = seal(peakIdx);
 
-        steadyN = min(round(S.testSteadyWindowMs/1000*S.Fs),numel(seal));
-        steadyRange = (numel(seal)-steadyN+1):numel(seal);
-        Iss(k) = mean(seal(steadyRange),'omitnan');
+        % Steady-state current from final part of test pulse.
+        steadyN = min( ...
+            round(S.testSteadyWindowMs/1000*S.Fs), ...
+            numel(seal));
 
+        steadyRange = (numel(seal)-steadyN+1):numel(seal);
+
+        Iss(k) = mean(seal(steadyRange),'omitnan');
 
         %% Rs / Rin
 
@@ -84,8 +103,8 @@ for c = 1:numel(conditions)
             Rtotal(k) = 1000*abs(S.testPulse_mV/deltaIss);
             Rin(k) = Rtotal(k)-Rs(k);
         end
-    end
 
+    end
 
     %% SAVE TRIAL METRICS
 
@@ -102,14 +121,28 @@ for c = 1:numel(conditions)
     Data.(cond).Rtotal = Rtotal;
     Data.(cond).Rin = Rin;
 
-    Data.(cond).trialMetrics = table(trialNums(:),trialNames(:),baselineCurrent(:), ...
-        baselineSigma(:),baselineFitR2(:),Rs(:),Rtotal(:),Rin(:), ...
-        'VariableNames',{'TrialNum','TrialName','Baseline_pA','NoiseSigma_pA', ...
-        'BaselineFitR2','Rs_MOhm','Rtotal_MOhm','Rin_MOhm'});
+    Data.(cond).trialMetrics = table( ...
+        trialNums(:), ...
+        trialNames(:), ...
+        baselineCurrent(:), ...
+        baselineSigma(:), ...
+        baselineFitR2(:), ...
+        Rs(:), ...
+        Rtotal(:), ...
+        Rin(:), ...
+        'VariableNames',{ ...
+        'TrialNum', ...
+        'TrialName', ...
+        'Baseline_pA', ...
+        'NoiseSigma_pA', ...
+        'BaselineFitR2', ...
+        'Rs_MOhm', ...
+        'Rtotal_MOhm', ...
+        'Rin_MOhm'});
+
 end
 
-
-%% PLOT Rs AND Rin ACROSS THE ENTIRE EXPERIMENT
+%% PLOT Rs AND Rin ACROSS ENTIRE EXPERIMENT
 
 fig = figure('Color','w','Position',[200 100 900 650]);
 t = tiledlayout(fig,2,1,'TileSpacing','compact','Padding','compact');
@@ -124,16 +157,30 @@ allRs = [];
 allRin = [];
 
 for c = 1:numel(conditions)
+
     cond = conditions{c};
 
-    plot(axRs,Data.(cond).notDelTrialNums,Data.(cond).Rs,'o-','LineWidth',1, ...
-        'MarkerFaceColor',color{c},'Color',color{c},'DisplayName',strrep(cond,'_','/'));
+    plot(axRs, ...
+        Data.(cond).notDelTrialNums, ...
+        Data.(cond).Rs, ...
+        'o-', ...
+        'LineWidth',1, ...
+        'MarkerFaceColor',color{c}, ...
+        'Color',color{c}, ...
+        'DisplayName',strrep(cond,'_','/'));
 
-    plot(axRin,Data.(cond).notDelTrialNums,Data.(cond).Rin,'o-','LineWidth',1, ...
-        'MarkerFaceColor',color{c},'Color',color{c},'DisplayName',strrep(cond,'_','/'));
+    plot(axRin, ...
+        Data.(cond).notDelTrialNums, ...
+        Data.(cond).Rin, ...
+        'o-', ...
+        'LineWidth',1, ...
+        'MarkerFaceColor',color{c}, ...
+        'Color',color{c}, ...
+        'DisplayName',strrep(cond,'_','/'));
 
     allRs = [allRs; Data.(cond).Rs(:)];
     allRin = [allRin; Data.(cond).Rin(:)];
+
 end
 
 allRs = allRs(isfinite(allRs));
@@ -155,9 +202,17 @@ legend(axRin,'Location','best');
 box(axRs,'off');
 box(axRin,'off');
 
+%% SAVE
+
 if nargin >= 4 && ~isempty(figureFolder)
-    savefig(fig,fullfile(figureFolder,'Rs Rin Stability.fig'));
-    exportgraphics(fig,fullfile(figureFolder,'Rs Rin Stability.png'),'Resolution',300);
+
+    savefig(fig, ...
+        fullfile(figureFolder,'Rs Rin Stability.fig'));
+
+    exportgraphics(fig, ...
+        fullfile(figureFolder,'Rs Rin Stability.png'), ...
+        'Resolution',300);
+
 end
 
 end
@@ -166,13 +221,17 @@ end
 function ymax = paddedPositiveMax(vals)
 
 if isempty(vals)
+
     ymax = 1;
+
 else
+
     ymax = 1.5*max(abs(vals));
 
     if ~isfinite(ymax) || ymax <= 0
         ymax = 1;
     end
+
 end
 
 end

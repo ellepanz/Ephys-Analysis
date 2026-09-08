@@ -18,8 +18,7 @@ S.testPeakAverageSamples = 3;
 S.testSteadyWindowMs = 5.0;
 
 % All-points histogram / Gaussian fit
-S.fitBinWidth_pA = 0.5;
-S.fitRightOffset_pA = 1;
+S.fitBinWidth_pA = 1;
 S.sgOrder = 2;
 S.sgFrame = 111;
 S.maxMuShiftFromPeak_pA = 5;
