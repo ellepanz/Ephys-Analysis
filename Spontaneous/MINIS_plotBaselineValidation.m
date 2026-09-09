@@ -93,9 +93,6 @@ end
 
 %% DETAILED TRACE + HISTOGRAM VALIDATION
 
-
-end
-
 for c = 1:numel(validationConditions)
     cond = validationConditions{c};
     idx = Data.(cond).stableNotDelIdx;
@@ -199,4 +196,6 @@ else
     if ~isfinite(ymax) || ymax <= 0
         ymax = 1;
     end
+end
+
 end
