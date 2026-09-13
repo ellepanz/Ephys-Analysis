@@ -4,27 +4,27 @@ function S = MINIS_defaultSettings
 S.Fs = 10000;
 
 % Acquisition timing
-S.trialStartIntervalSec = 30;
-S.miniDurationSec = 19.9;
+S.trialStartIntervalSec = 20;
+S.miniDurationSec = 9.9;
 S.baselineWindowSec = 1.0;
-S.recordingLength = 20;
+S.recordingLength = 10;
 
 % Test pulse
 S.testPulse_mV = -5;
-S.testPulseStartSec = 19.9;
+S.testPulseStartSec = 9.9;
 S.testPulseDurationSec = 0.030;
 S.testPeakSearchMs = 2.0;
 S.testPeakAverageSamples = 3;
 S.testSteadyWindowMs = 5.0;
 
 % All-points histogram / Gaussian fit
-S.fitBinWidth_pA = 1;
+S.fitBinWidth_pA = 0.5;
 S.sgOrder = 2;
 S.sgFrame = 111;
 S.maxMuShiftFromPeak_pA = 5;
 
 % Display histograms
-S.displayBinWidth_pA = 5;
+S.displayBinWidth_pA = 0.5;
 
 % Canonical condition names
 S.controlCondition = 'NBQX';

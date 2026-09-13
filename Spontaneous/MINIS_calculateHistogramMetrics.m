@@ -33,7 +33,11 @@ for c = 1:numel(analysisConditions)
         error('Data.%s.stableMiniData does not exist. Select stable trials first.',cond);
     end
 
-    miniData = Data.(cond).stableMiniData;
+    if size(Data.(cond).stableMiniData,1) < S.miniSamples
+        error('Data.%s.stableMiniData is shorter than the expected %.1f s.',cond,S.miniDurationSec);
+    end
+
+    miniData = Data.(cond).stableMiniData(1:S.miniSamples,:);
 
     nSamples = size(miniData,1);
     nTrials = size(miniData,2);

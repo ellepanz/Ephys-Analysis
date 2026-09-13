@@ -7,6 +7,7 @@ function MINIS_plotSynapticExcessVariability(Data,S,conditions,color,figureFolde
 
 plotConditions = getAnalysisConditions(conditions,S);
 nCond = numel(plotConditions);
+expectedEpochsPerTrial = floor(S.miniDurationSec);
 
 if nCond == 0
     error('No conditions remain for holding/synaptic-current plotting.');
@@ -39,6 +40,14 @@ allHolding = [];
 for c = 1:nCond
 
     cond = plotConditions{c};
+
+    if isfield(Data.(cond).oneSecEpoch,'epochsPerTrial') && ...
+            Data.(cond).oneSecEpoch.epochsPerTrial ~= expectedEpochsPerTrial
+        warning(['Data.%s.oneSecEpoch was calculated with %d epochs/trial; ' ...
+            'the current protocol expects %d complete 1-s epochs. ' ...
+            'Re-run MINIS_calculateHistogramMetrics.'], ...
+            cond,Data.(cond).oneSecEpoch.epochsPerTrial,expectedEpochsPerTrial);
+    end
 
     epochValues = ...
         Data.(cond).oneSecEpoch.epochHoldingCurrent(:);
@@ -172,7 +181,7 @@ if nargin >= 5 && ~isempty(figureFolder)
     savefig(fig, ...
         fullfile(figureFolder,'Holding Synaptic Excess Variability.fig'));
 
-    exportgraphics(fig, ...
+    exportgraphics(t, ...
         fullfile(figureFolder,'Holding Synaptic Excess Variability.png'), ...
         'Resolution',300);
 end

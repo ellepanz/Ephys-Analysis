@@ -29,6 +29,7 @@ cellFolder = fileparts(figureFolder);
 stabilityFile = fullfile(figureFolder,'Baseline Sigma Rs Rin Stable Selection.png');
 baselineValidationFile = fullfile(figureFolder,'Stable Baseline Fit Summary.png');
 summaryFile = fullfile(figureFolder,'Holding Synaptic Excess Variability.png');
+comparisonFile = fullfile(figureFolder,'Whole Trial and 1s Analysis Comparison.png');
 
 pdfFile = fullfile(cellFolder,sprintf('%s_summary.pdf',Expt.marker));
 summaryFigFile = fullfile(cellFolder,sprintf('%s_summary.fig',Expt.marker));
@@ -37,6 +38,18 @@ if strlength(string(dataFile)) == 0
     dataFile = resolveDataFile(cellFolder,Expt.marker,binderIndexFile);
 else
     dataFile = char(string(dataFile));
+end
+
+%% WHOLE-19-S BASELINE-QC EXCLUSION NOTATION
+
+baselineQCText = "Whole-19-s baseline QC exclusions: not available";
+
+if isfile(dataFile)
+    savedData = load(dataFile,'Data');
+
+    if isfield(savedData,'Data')
+        baselineQCText = buildBaselineQCText(savedData.Data,conditions);
+    end
 end
 
 if ~isfile(stabilityFile)
@@ -86,9 +99,9 @@ end
 metaLines = [
     "Experiment:          " + string(Expt.marker)
     "Date:                " + string(Expt.date)
+    "Recording Type:      " + string(Expt.recordingType)
     "Starting Condition:  " + string(Expt.startingCond)
     "Drug Condition:      " + string(Expt.drugCond)
-    "Drug Duration:       " + string(Expt.drugTime)
     "Internal:            " + string(Expt.internal)
     "Holding Potential:   " + string(Expt.Vh)
     "Temperature:         " + string(Expt.temp)
@@ -102,6 +115,33 @@ metaLines = [
 ];
 
 metadataText = strjoin(metaLines,newline);
+
+%% REANALYSIS PROCESS NOTATION
+
+% Only show this box for cells that were actually reprocessed.
+showReanalysis = ...
+    (isfield(Expt,'lastReprocessMethod') && strlength(string(Expt.lastReprocessMethod)) > 0) || ...
+    (isfield(Expt,'lastReprocessDate') && ~isempty(Expt.lastReprocessDate));
+
+reanalysisText = "";
+
+if showReanalysis
+    reanalysisLines = [
+        "Reanalysis process:"
+        "  Whole19: one Gaussian across first 19 s; manually baseline-unstable/bimodal stable trials excluded"
+        "  Local1s: 19 x 1-s Gaussian fits; all selected stable trials retained"
+    ];
+
+    if isfield(Expt,'lastReprocessMethod') && strlength(string(Expt.lastReprocessMethod)) > 0
+        reanalysisLines(end+1) = "  Saved method: " + string(Expt.lastReprocessMethod);
+    end
+
+    if isfield(Expt,'lastReprocessDate') && ~isempty(Expt.lastReprocessDate)
+        reanalysisLines(end+1) = "  Reprocessed: " + string(Expt.lastReprocessDate);
+    end
+
+    reanalysisText = strjoin(reanalysisLines,newline);
+end
 
 %% CREATE LETTER-SIZE SUMMARY PAGE
 
@@ -152,9 +192,36 @@ if ~includeInPopulation && strlength(exclusionReason) > 0
         'EdgeColor','none','VerticalAlignment','middle');
 end
 
+%% REANALYSIS PROCESS
+
+if showReanalysis
+    reanalysisPosition = [contentLeft contentBottom+0.82*contentHeight contentWidth 0.085*contentHeight];
+
+    annotation(fig,'textbox',reanalysisPosition, ...
+        'String',reanalysisText, ...
+        'FontName','Consolas','FontSize',8.1,'Interpreter','none', ...
+        'EdgeColor',[0.45 0.45 0.45],'LineWidth',0.9, ...
+        'VerticalAlignment','middle','HorizontalAlignment','left');
+
+    baselineQCY = 0.755;
+else
+    % First-time analyses do not need a reanalysis box.
+    baselineQCY = 0.835;
+end
+
+%% WHOLE-19-S BASELINE-QC EXCLUSIONS
+
+baselineQCPosition = [contentLeft contentBottom+baselineQCY*contentHeight contentWidth 0.055*contentHeight];
+
+annotation(fig,'textbox',baselineQCPosition, ...
+    'String',baselineQCText, ...
+    'FontName','Consolas','FontSize',8.5,'Interpreter','none', ...
+    'EdgeColor',[0.65 0.65 0.65],'LineWidth',0.8, ...
+    'VerticalAlignment','middle','HorizontalAlignment','left');
+
 %% METADATA
 
-metadataPosition = [contentLeft contentBottom+0.70*contentHeight contentWidth 0.19*contentHeight];
+metadataPosition = [contentLeft contentBottom+0.55*contentHeight contentWidth 0.19*contentHeight];
 
 annotation(fig,'textbox',metadataPosition,'String',metadataText,'FontName','Consolas', ...
     'FontSize',8.5,'Interpreter','none','EdgeColor','none','VerticalAlignment','top');
@@ -164,9 +231,9 @@ annotation(fig,'textbox',metadataPosition,'String',metadataText,'FontName','Cons
 figureGap = 0.02;
 halfWidth = (contentWidth-figureGap)/2;
 
-stabilityPosition = [contentLeft contentBottom+0.38*contentHeight contentWidth 0.29*contentHeight];
-baselineValidationPosition = [contentLeft contentBottom+0.04*contentHeight halfWidth 0.29*contentHeight];
-summaryPosition = [contentLeft+halfWidth+figureGap contentBottom+0.04*contentHeight halfWidth 0.29*contentHeight];
+stabilityPosition = [contentLeft contentBottom+0.27*contentHeight contentWidth 0.26*contentHeight];
+baselineValidationPosition = [contentLeft contentBottom+0.02*contentHeight halfWidth 0.23*contentHeight];
+summaryPosition = [contentLeft+halfWidth+figureGap contentBottom+0.02*contentHeight halfWidth 0.23*contentHeight];
 
 addImageToPage(fig,stabilityFile,stabilityPosition);
 
@@ -197,7 +264,14 @@ if isfile(pdfFile)
 end
 
 exportgraphics(fig,pdfFile,'ContentType','vector','BackgroundColor','white');
+%% ADD WHOLE19 VS LOCAL1S COMPARISON PAGE
 
+if isfile(comparisonFile)
+    comparisonFig = createValidationPage(comparisonFile,Expt.marker);
+    exportgraphics(comparisonFig,pdfFile,'ContentType','vector', ...
+        'BackgroundColor','white','Append',true);
+    delete(comparisonFig);
+end
 %% ADD VALIDATION PAGES TO INDIVIDUAL CELL PDF
 
 if includeValidationPages
@@ -293,6 +367,89 @@ vars = {'Marker','RecordingType','StudyID','DataFile','FigureFolder','SummaryFig
 BinderIndex = BinderIndex(:,vars);
 
 end
+
+%% BUILD WHOLE-19-S BASELINE-QC TEXT
+
+function textOut = buildBaselineQCText(Data,conditions)
+
+lines = "Whole-19-s baseline QC exclusions:";
+
+if isempty(conditions)
+    conditions = fieldnames(Data);
+end
+
+foundWholeTrial = false;
+
+for k = 1:numel(conditions)
+    cond = char(string(conditions{k}));
+
+    if ~isfield(Data,cond)
+        continue
+    end
+
+    if isfield(Data.(cond),'wholeTrial')
+        W = Data.(cond).wholeTrial;
+        foundWholeTrial = true;
+
+        if isfield(W,'nSelectedStableTrials')
+            nSelected = W.nSelectedStableTrials;
+        elseif isfield(Data.(cond),'stableTrialNames')
+            nSelected = numel(Data.(cond).stableTrialNames);
+        else
+            nSelected = NaN;
+        end
+
+        if isfield(W,'excludedTrialNames')
+            excluded = string(W.excludedTrialNames);
+        elseif isfield(Data.(cond),'baselineSensitivityExcludedTrialNames')
+            excluded = string(Data.(cond).baselineSensitivityExcludedTrialNames);
+        else
+            excluded = strings(0,1);
+        end
+
+    elseif isfield(Data.(cond),'baselineSensitivityExcludedTrialNames')
+        foundWholeTrial = true;
+
+        if isfield(Data.(cond),'stableTrialNames')
+            nSelected = numel(Data.(cond).stableTrialNames);
+        else
+            nSelected = NaN;
+        end
+
+        excluded = string(Data.(cond).baselineSensitivityExcludedTrialNames);
+
+    else
+        continue
+    end
+
+    excluded = excluded(strlength(excluded) > 0);
+    condLabel = strrep(string(cond),'_','/');
+
+    if isempty(excluded)
+        if isfinite(nSelected)
+            lines(end+1) = sprintf("  %s: 0/%d excluded",condLabel,nSelected);
+        else
+            lines(end+1) = sprintf("  %s: none excluded",condLabel);
+        end
+    else
+        if isfinite(nSelected)
+            lines(end+1) = sprintf("  %s: %d/%d excluded: %s", ...
+                condLabel,numel(excluded),nSelected,strjoin(excluded,", "));
+        else
+            lines(end+1) = sprintf("  %s excluded: %s", ...
+                condLabel,strjoin(excluded,", "));
+        end
+    end
+end
+
+if ~foundWholeTrial
+    textOut = "Whole-19-s baseline QC exclusions: not yet calculated";
+else
+    textOut = strjoin(lines,newline);
+end
+
+end
+
 
 %% RESOLVE CURRENT DATA FILE
 
