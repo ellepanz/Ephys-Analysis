@@ -4,7 +4,7 @@ function S = MINIS_defaultSettings
 S.Fs = 10000;
 
 % Acquisition timing
-S.trialStartIntervalSec = 20;
+S.trialStartIntervalSec = 20; % ISI
 S.miniDurationSec = 9.9;
 S.baselineWindowSec = 1.0;
 S.recordingLength = 10;
@@ -27,7 +27,7 @@ S.maxMuShiftFromPeak_pA = 5;
 S.displayBinWidth_pA = 0.5;
 
 % Canonical condition names
-S.controlCondition = 'NBQX';
+S.baselineCondition = 'NBQX';
 S.drugCondition = 'NMDA';
 S.washCondition = 'Washout';
 

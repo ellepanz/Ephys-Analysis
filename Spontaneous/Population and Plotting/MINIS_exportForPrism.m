@@ -68,7 +68,7 @@ if isfile(prismFile)
     delete(prismFile);
 end
 
-baseLabel = matlab.lang.makeValidName(char(string(S.controlCondition)));
+baseLabel = matlab.lang.makeValidName(char(string(S.baselineCondition)));
 washLabel = matlab.lang.makeValidName(char(string(S.washCondition)));
 
 %% WHOLE19: HOLDING CURRENT

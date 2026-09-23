@@ -1,7 +1,7 @@
 function MINIS_plotHistograms(Data, S, conditions, color, figureFolder)
 % Plot stable concatenated traces and display histograms for Control/Washout.
 
-condsToPlot = {S.controlCondition, S.washCondition};
+condsToPlot = {S.baselineCondition, S.washCondition};
 
 fig = figure('Color','w','Position',[200 100 1200 750]);
 tiledlayout(fig,2,2,'TileSpacing','compact','Padding','compact');

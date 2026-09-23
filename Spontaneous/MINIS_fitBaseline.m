@@ -62,14 +62,15 @@ end
 
 sigma0 = min(max(sigma0,binWidth),50);
 
-q0 = [log(A0),0,log(sigma0)];
+q0 = [log(A0),log(sigma0)];
 
 AfromQ = @(q) exp(q(1));
-mufromQ = @(q) peakCurrent + S.maxMuShiftFromPeak_pA*tanh(q(2));
-sigmafromQ = @(q) exp(q(3));
+sigmafromQ = @(q) exp(q(2));
+
+mu = peakCurrent;
 
 gaussianFromQ = @(q,x) AfromQ(q).*exp( ...
-    -0.5.*((x-mufromQ(q))./sigmafromQ(q)).^2);
+    -0.5.*((x-mu)./sigmafromQ(q)).^2);
 
 gaussianSSE = @(q) sum((yFit-gaussianFromQ(q,xFit)).^2) + ...
     1e9*(sigmafromQ(q) > 100 || sigmafromQ(q) < 0.05);
@@ -78,7 +79,6 @@ opts = optimset('Display','off','MaxFunEvals',5000,'MaxIter',2000);
 q = fminsearch(gaussianSSE,q0,opts);
 
 A = AfromQ(q);
-mu = mufromQ(q);
 sigma = sigmafromQ(q);
 
 %% EVALUATE GAUSSIAN

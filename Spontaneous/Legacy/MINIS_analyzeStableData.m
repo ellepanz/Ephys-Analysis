@@ -15,7 +15,7 @@ function Data = MINIS_analyzeStableData(Data, S, conditions, color, figureFolder
 % This method quantifies mean phasic current. It does NOT identify the
 % timing/amplitude of individual mIPSC events.
 
-condsToAnalyze = {S.controlCondition, S.washCondition};
+condsToAnalyze = {S.baselineCondition, S.washCondition};
 firstTrialNum = findFirstTrialNum(Data,conditions);
 
 fig = figure('Color','w','Position',[150 80 1300 850]);

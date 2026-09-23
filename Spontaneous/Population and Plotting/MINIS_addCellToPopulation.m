@@ -12,8 +12,8 @@ paths = MINIS_getPopulationPaths(Expt);
 populationFile = paths.populationFile;
 analysisConditions = getAnalysisConditions(conditions,S);
 
-if ~ismember(S.controlCondition,analysisConditions)
-    error('Control condition %s is not available for population analysis.',S.controlCondition);
+if ~ismember(S.baselineCondition,analysisConditions)
+    error('Control condition %s is not available for population analysis.',S.baselineCondition);
 end
 
 if ~ismember(S.washCondition,analysisConditions)
@@ -96,7 +96,7 @@ end
 
 %% BUILD ONE WIDE CONTROL/WASHOUT ROW
 
-base = S.controlCondition;
+base = S.baselineCondition;
 wash = S.washCondition;
 
 LB = Data.(base);
@@ -108,6 +108,7 @@ row = struct;
 
 row.CellID = string(Expt.marker);
 row.RecordingType = string(Expt.recordingType);
+row.baselineCondition = string(S.baselineCondition);
 row.StudyID = string(Expt.studyID);
 row.DataFile = string(dataFile);
 row.DualReprocessed = true;

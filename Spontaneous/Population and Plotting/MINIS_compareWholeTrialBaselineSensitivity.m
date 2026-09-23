@@ -17,10 +17,10 @@ analysisDurationSec = S.miniDurationSec;
 analysisSamples = S.miniSamples;
 
 if ~isfield(S,'controlCondition') || ~isfield(S,'washCondition')
-    error('S.controlCondition and S.washCondition must be defined.');
+    error('S.baselineCondition and S.washCondition must be defined.');
 end
 
-plotConditions = {S.controlCondition,S.washCondition};
+plotConditions = {S.baselineCondition,S.washCondition};
 Sensitivity = struct;
 Sensitivity.analysisDurationSec = analysisDurationSec;
 Sensitivity.analysisSamples = analysisSamples;
@@ -139,7 +139,7 @@ end
 
 %% CONTROL -> WASHOUT DELTAS
 
-controlCond = S.controlCondition;
+controlCond = S.baselineCondition;
 washCond = S.washCondition;
 
 Sensitivity.delta.wholeAllStable.holdingCurrent_pA = ...
