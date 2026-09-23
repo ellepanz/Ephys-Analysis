@@ -40,29 +40,25 @@ color = assignColors(conditions); Colors
 clear Cond1 Cond2 Cond3 Cond4 Epoch1 Epoch2 Epoch3 Epoch3 epochs colors
 
 %% FULL ANALYSIS
-
 Data = MINIS_deleteTrials(Data,S,conditions,figureFolder,'raw'); % gross trace QC only
 % Data = MINIS_QCTestPulses(Data,S,conditions,figureFolder);
 
-Data = MINIS_calculateTrialMetrics(Data,conditions,S,figureFolder,color); % calcs Rs/Rin and fits gaussian to full trace
-Data = MINIS_selectStableTrials(Data,S,conditions,color,figureFolder,Expt);  
+Data = MINIS_calculateTrialMetrics(Data,conditions,S,figureFolder,color); % calcs Rs/Rin and fits Gaussian to full trace
+Data = MINIS_selectStableTrials(Data,S,conditions,color,figureFolder,Expt);
 
-% Review the selected stable trials for whole 19s baseline instability.
-% Marked trials are excluded from the whole-trial analysis but remain in the 1s segmented analysis.
+% Review selected stable trials for whole-trial baseline instability.
+% Marked trials are excluded from the final whole-trial analysis.
 [Data,Review] = MINIS_reviewBaselineTrialExclusions(Data,S,conditions,color,Expt);
 
-% Mike analysis: one Gaussian fit across each 19-s trial after baseline-QC exclusions.
+% Final analysis: one Gaussian fit across each whole trial after baseline-QC exclusions.
 Data = MINIS_calculateWholeTrialMetrics(Data,S,conditions);
 
-% Chiayu analysis: same originally selected stable trials, segmented into 1-s epochs.
-Data = MINIS_calculateHistogramMetrics(Data,S,conditions);
-
-% Existing validation/summary outputs.
+% Whole-trial Gaussian fit QC.
 MINIS_plotBaselineValidation(Data,S,conditions,color,figureFolder,Expt);
+
+% Whole-trial holding-current and phasic-current summary.
 MINIS_plotSynapticExcessVariability(Data,S,conditions,color,figureFolder,Expt);
 
-% Side-by-side whole-trial sensitivity + 1-s comparison.
-Sensitivity = MINIS_compareWholeTrialBaselineSensitivity(Data,S,conditions,color,figureFolder,Expt);
     
 % Data = MINIS_calculateImean(Data,S,conditions); % use for original analysis calculating current mean
 % MINIS_plotImeanVariability(Data,S,conditions,color,figureFolder,Expt); % use for original analysis 

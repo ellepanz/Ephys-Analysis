@@ -1,4 +1,4 @@
-function fit = MINIS_fitBaseline(trial,S)
+function fit = MINIS_fitBaseline(trial,S,selectedMu)
 % Estimate holding current and inward synaptic current from an all-points histogram.
 %
 % The Gaussian is fit beginning at the histogram peak and extending
@@ -18,6 +18,10 @@ trial = trial(isfinite(trial));
 
 if isempty(trial)
     error('MINIS_fitBaseline received no finite samples.');
+end
+
+if nargin < 3
+    selectedMu = [];
 end
 
 binWidth = S.fitBinWidth_pA;
@@ -42,7 +46,13 @@ peakCurrent = centers(peakIdx);
 
 %% FIT RIGHT SIDE OF HISTOGRAM
 
-fitMask = centers >= peakCurrent & centers <= max(trial);
+if isempty(selectedMu)
+    mu = peakCurrent;
+else
+    mu = selectedMu;
+end
+
+fitMask = centers >= mu & centers <= max(trial);
 
 xFit = centers(fitMask);
 yFit = pointFreq(fitMask);
@@ -53,7 +63,7 @@ end
 
 A0 = max(max(yFit),eps);
 
-rightData = trial(trial >= peakCurrent);
+rightData = trial(trial >= mu);
 sigma0 = std(rightData);
 
 if ~isfinite(sigma0) || sigma0 < binWidth
@@ -66,8 +76,6 @@ q0 = [log(A0),log(sigma0)];
 
 AfromQ = @(q) exp(q(1));
 sigmafromQ = @(q) exp(q(2));
-
-mu = peakCurrent;
 
 gaussianFromQ = @(q,x) AfromQ(q).*exp( ...
     -0.5.*((x-mu)./sigmafromQ(q)).^2);

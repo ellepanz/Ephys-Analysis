@@ -65,9 +65,42 @@ for c = 1:numel(analysisConditions)
     allR2 = nan(1,nTrials);
     allFits = cell(1,nTrials);
 
+    allSelectedMu = nan(1,nTrials);
+
     for k = 1:nTrials
         trial = miniData(1:analysisSamples,k);
-        fit = MINIS_fitBaseline(trial,S);
+
+        binWidth = S.fitBinWidth_pA;
+        lo = floor(min(trial)/binWidth)*binWidth;
+        hi = ceil(max(trial)/binWidth)*binWidth;
+        edges = lo:binWidth:(hi+binWidth);
+
+        if numel(edges) < 2
+            edges = [lo lo+binWidth];
+        end
+
+        [pointFreq,edges] = histcounts(trial,edges);
+        centers = edges(1:end-1) + diff(edges)/2;
+
+        [~,peakIdx] = max(pointFreq);
+        peakCurrent = centers(peakIdx);
+
+        figure('Name',sprintf('%s - %s',cond,trialNames(k)),'Color','w');
+        bar(centers,pointFreq,1,'FaceColor',[0.8 0.8 0.8],'EdgeColor','none');
+        hold on
+        xline(peakCurrent,'k--','Histogram peak');
+        xlabel('Current (pA)');
+        ylabel('Point count');
+        title(sprintf('%s | %s | Click desired mu',strrep(cond,'_','/'),trialNames(k)));
+        box off
+
+        [selectedMu,~] = ginput(1);
+        selectedMu = centers(find(abs(centers-selectedMu) == min(abs(centers-selectedMu)),1,'first'));
+        close(gcf);
+
+        allSelectedMu(k) = selectedMu;
+
+        fit = MINIS_fitBaseline(trial,S,selectedMu);
 
         allFits{k} = fit;
         allHolding(k) = fit.mu;
@@ -87,6 +120,7 @@ for c = 1:numel(analysisConditions)
     W.allStableSigma = allSigma;
     W.allStableFitR2 = allR2;
     W.allStableFits = allFits;
+    W.allStableSelectedMu = allSelectedMu;
 
     W.avgAllStableHoldingCurrent = mean(allHolding,'omitnan');
     W.avgAllStableSynapticCharge_pC = mean(allSynapticCharge,'omitnan');
@@ -104,6 +138,7 @@ for c = 1:numel(analysisConditions)
     W.trialSigma = allSigma(includedMask);
     W.trialFitR2 = allR2(includedMask);
     W.trialFits = allFits(includedMask);
+    W.trialSelectedMu = allSelectedMu(includedMask);
 
     W.avgHoldingCurrent = mean(W.trialHoldingCurrent,'omitnan');
     W.avgSynapticCharge_pC = mean(W.trialSynapticCharge_pC,'omitnan');

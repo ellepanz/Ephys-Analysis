@@ -1,4 +1,4 @@
-function Data = MINIS_calculateTrialMetrics(Data,conditions,S,figureFolder,color)
+function Data = MINIS_calculateRsRin(Data,conditions,S,figureFolder,color)
 % Calculate baseline-fit and resistance metrics for all experimental conditions.
 %
 % For every trial remaining after trace QC:

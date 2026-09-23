@@ -1,13 +1,13 @@
 function MINIS_plotSynapticExcessVariability(Data,S,conditions,color,figureFolder,Expt)
-% Plot local holding-current and synaptic-current variability.
+% Plot whole-trial holding-current and synaptic-current variability.
 %
-% Small dots    = individual 1-s epochs
-% Large circles = per-trial values
-% Black bars    = mean across stable trials
+% Dots       = individual analyzed whole trials
+% Black bars = mean across analyzed trials
+%
+% Trials excluded during whole-trial baseline QC are not plotted.
 
 plotConditions = getAnalysisConditions(conditions,S);
 nCond = numel(plotConditions);
-expectedEpochsPerTrial = floor(S.miniDurationSec);
 
 if nCond == 0
     error('No conditions remain for holding/synaptic-current plotting.');
@@ -16,7 +16,6 @@ end
 plotColors = cell(1,nCond);
 
 for c = 1:nCond
-
     condIdx = find(strcmp(conditions,plotConditions{c}),1);
 
     if isempty(condIdx)
@@ -24,6 +23,10 @@ for c = 1:nCond
     end
 
     plotColors{c} = color{condIdx};
+
+    if ~isfield(Data.(plotConditions{c}),'wholeTrial')
+        error('Data.%s.wholeTrial is missing. Run MINIS_calculateWholeTrialMetrics first.',plotConditions{c});
+    end
 end
 
 fig = figure('Color','w','Position',[200 100 1200 500]);
@@ -38,40 +41,20 @@ holdingMeans = nan(1,nCond);
 allHolding = [];
 
 for c = 1:nCond
-
     cond = plotConditions{c};
-
-    if isfield(Data.(cond).oneSecEpoch,'epochsPerTrial') && ...
-            Data.(cond).oneSecEpoch.epochsPerTrial ~= expectedEpochsPerTrial
-        warning(['Data.%s.oneSecEpoch was calculated with %d epochs/trial; ' ...
-            'the current protocol expects %d complete 1-s epochs. ' ...
-            'Re-run MINIS_calculateHistogramMetrics.'], ...
-            cond,Data.(cond).oneSecEpoch.epochsPerTrial,expectedEpochsPerTrial);
-    end
-
-    epochValues = ...
-        Data.(cond).oneSecEpoch.epochHoldingCurrent(:);
-
-    epochValues = epochValues(isfinite(epochValues));
-    allHolding = [allHolding; epochValues];
-
-    if ~isempty(epochValues)
-
-        x = c + linspace(-0.15,0.15,numel(epochValues))';
-
-        scatter(axHolding,x,epochValues,15,plotColors{c}, ...
-            'filled','MarkerFaceAlpha',0.25);
-    end
-
-    trialValues = Data.(cond).trialHoldingCurrent;
+    trialValues = Data.(cond).wholeTrial.trialHoldingCurrent;
     trialValues = trialValues(isfinite(trialValues));
 
-    scatter(axHolding,repmat(c,size(trialValues)), ...
-        trialValues,55,plotColors{c}, ...
-        'filled','MarkerEdgeColor','k');
+    allHolding = [allHolding; trialValues(:)];
 
-    holdingMeans(c) = ...
-        mean(trialValues,'omitnan');
+    if ~isempty(trialValues)
+        x = c + linspace(-0.12,0.12,numel(trialValues));
+
+        scatter(axHolding,x,trialValues,55,plotColors{c}, ...
+            'filled','MarkerEdgeColor','k');
+    end
+
+    holdingMeans(c) = mean(trialValues,'omitnan');
 
     plot(axHolding,[c-0.25 c+0.25], ...
         [holdingMeans(c) holdingMeans(c)], ...
@@ -84,7 +67,6 @@ set(axHolding,'XTick',1:nCond, ...
 xlim(axHolding,[0.5 nCond+0.5]);
 
 if ~isempty(allHolding)
-
     ymin = min(allHolding);
     ymax = max(allHolding);
     pad = 0.1*(ymax-ymin);
@@ -109,32 +91,20 @@ synapticMeans = nan(1,nCond);
 allSynaptic = [];
 
 for c = 1:nCond
-
     cond = plotConditions{c};
-
-    epochValues = ...
-        Data.(cond).oneSecEpoch.epochSynapticCurrent_pA(:);
-
-    epochValues = epochValues(isfinite(epochValues));
-    allSynaptic = [allSynaptic; epochValues];
-
-    if ~isempty(epochValues)
-
-        x = c + linspace(-0.15,0.15,numel(epochValues))';
-
-        scatter(axSynaptic,x,epochValues,15,plotColors{c}, ...
-            'filled','MarkerFaceAlpha',0.25);
-    end
-
-    trialValues = Data.(cond).trialSynapticCurrent_pA;
+    trialValues = Data.(cond).wholeTrial.trialSynapticCurrent_pA;
     trialValues = trialValues(isfinite(trialValues));
 
-    scatter(axSynaptic,repmat(c,size(trialValues)), ...
-        trialValues,55,plotColors{c}, ...
-        'filled','MarkerEdgeColor','k');
+    allSynaptic = [allSynaptic; trialValues(:)];
 
-    synapticMeans(c) = ...
-        mean(trialValues,'omitnan');
+    if ~isempty(trialValues)
+        x = c + linspace(-0.12,0.12,numel(trialValues));
+
+        scatter(axSynaptic,x,trialValues,55,plotColors{c}, ...
+            'filled','MarkerEdgeColor','k');
+    end
+
+    synapticMeans(c) = mean(trialValues,'omitnan');
 
     plot(axSynaptic,[c-0.25 c+0.25], ...
         [synapticMeans(c) synapticMeans(c)], ...
@@ -147,7 +117,6 @@ set(axSynaptic,'XTick',1:nCond, ...
 xlim(axSynaptic,[0.5 nCond+0.5]);
 
 if ~isempty(allSynaptic)
-
     ymax = 1.15*max(allSynaptic);
 
     if ~isfinite(ymax) || ymax <= 0
@@ -161,12 +130,11 @@ ylabel(axSynaptic,'Synaptic current magnitude (pA)');
 title(axSynaptic,'Phasic synaptic current');
 box(axSynaptic,'off');
 
-sgtitle(sprintf('%s Summary',Expt.marker));
+sgtitle(sprintf('%s Whole-Trial Summary',Expt.marker));
 
 %% PRINT CONDITION CHANGES
 
 for c = 2:nCond
-
     fprintf('%s -> %s: holding delta %.2f pA; synaptic-current delta %.2f pA\n', ...
         strrep(plotConditions{c-1},'_','/'), ...
         strrep(plotConditions{c},'_','/'), ...
@@ -177,7 +145,6 @@ end
 %% SAVE
 
 if nargin >= 5 && ~isempty(figureFolder)
-
     savefig(fig, ...
         fullfile(figureFolder,'Holding Synaptic Excess Variability.fig'));
 
